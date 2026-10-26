@@ -154,13 +154,15 @@ Every model call's token usage is stored. See what the AI really cost, per kind 
 What keeps it down (`app/llm/anthropic_provider.py`):
 - **Prompt caching**: tools and instructions are cached on every call; chat also caches its history,
   and the history window moves in steps of 10 so the cached part stays identical between turns.
-- **Cheaper model for bulk work**: news extraction and startup scoring run on `ANTHROPIC_MODEL_FAST`
-  (Claude Haiku 5.5) at low effort; chat and drafts stay on `ANTHROPIC_MODEL` (Claude Sonnet 5.5).
+- **Cheaper model for bulk work and drafts**: news extraction and startup scoring run on
+  `ANTHROPIC_MODEL_FAST` (Claude Haiku 5.5) at low effort; email drafts, rewrites and follow-ups on
+  `ANTHROPIC_MODEL_DRAFT` (Claude Haiku 5.5); chat stays on `ANTHROPIC_MODEL` (Claude Sonnet 5.5).
 - **Effort per kind of work** (`EFFORT_CHAT`, `EFFORT_EXTRACT`, `EFFORT_DRAFT`).
 - **Draft cap** (`MAX_DRAFTS_PER_DAY`).
 
 The model and effort choices haven't been checked against an eval of real requests yet. If drafts
-or matches look worse, set `ANTHROPIC_MODEL_FAST` to the main model and clear the `EFFORT_*` values.
+look worse, set `ANTHROPIC_MODEL_DRAFT=claude-sonnet-5-5`; if matches do, set `ANTHROPIC_MODEL_FAST`
+to the main model and clear the `EFFORT_*` values.
 
 ### Bangalore focus
 Only pre-seed and seed startups in Bangalore get into the pool and into matches. Change

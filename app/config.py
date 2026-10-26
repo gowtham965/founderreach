@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     # High-volume, checkable work (news extraction, startup scoring, founder/profile extraction).
     # Set to the same as ANTHROPIC_MODEL to undo. Not yet validated by an eval on this app.
     anthropic_model_fast: str = "claude-haiku-5-5"
+    # Email drafts, rewrites, follow-ups and LinkedIn notes: ~20x cheaper than Sonnet 5.5 per token.
+    # Set to claude-sonnet-5-5 if drafts read worse (compare 20-30 real drafts once the key is in).
+    anthropic_model_draft: str = "claude-haiku-5-5"
     # Thinking effort per kind of work (low | medium | high | xhigh | max; empty = model default).
     # Not yet validated by an eval on this app; empty all three to restore the defaults.
     effort_chat: str = "medium"

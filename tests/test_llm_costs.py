@@ -31,6 +31,7 @@ def llm(monkeypatch):
     init_db()
     s = get_settings()
     for k, v in {"anthropic_model": "claude-sonnet-5-5", "anthropic_model_fast": "claude-haiku-5-5",
+                 "anthropic_model_draft": "claude-haiku-5-5",
                  "effort_chat": "medium", "effort_extract": "low", "effort_draft": ""}.items():
         monkeypatch.setattr(s, k, v)
     client = ap.AnthropicLLM.__new__(ap.AnthropicLLM)
@@ -43,7 +44,7 @@ def test_routing():
     s = get_settings()
     assert ap.route("score_matches") == (s.anthropic_model_fast, s.effort_extract)
     assert ap.route("extract_startups")[0] == s.anthropic_model_fast
-    assert ap.route("draft_email") == (s.anthropic_model, s.effort_draft)
+    assert ap.route("draft_email") == (s.anthropic_model_draft, s.effort_draft)
     assert ap.route("chat") == (s.anthropic_model, s.effort_chat)
 
 
@@ -64,10 +65,13 @@ def test_chat_caches_prefix_and_history(llm):
     assert kw["max_tokens"] >= 16000  # backstop, not a tight cap that cuts replies off
 
 
-def test_drafts_keep_model_default_effort(llm):
+def test_drafts_run_on_draft_model_at_default_effort(llm, monkeypatch):
     llm.complete_json("Write the email.", "facts...", task="draft_email")
     kw = llm.client.messages.calls[-1]
-    assert kw["model"] == "claude-sonnet-5-5" and "output_config" not in kw
+    assert kw["model"] == "claude-haiku-5-5" and "output_config" not in kw
+    monkeypatch.setattr(get_settings(), "anthropic_model_draft", "claude-sonnet-5-5")  # the one-line way back
+    llm.complete_json("Write the email.", "facts...", task="humanize")
+    assert llm.client.messages.calls[-1]["model"] == "claude-sonnet-5-5"
 
 
 def test_usage_recorded_and_reported(llm):

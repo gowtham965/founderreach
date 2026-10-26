@@ -4,8 +4,8 @@ Cost levers live here (see README → "AI costs"):
   * prompt caching: the tools + system prefix always carry a breakpoint; multi-step chat also
     caches its growing history (top-level automatic caching), so each tool step and each new
     message re-reads earlier turns at the cache rate instead of full price
-  * per-task model and effort (ANTHROPIC_MODEL_FAST, EFFORT_*): extraction and scoring run on a
-    cheaper model at low effort; chat and drafts stay on the main model
+  * per-task model and effort (ANTHROPIC_MODEL_FAST, ANTHROPIC_MODEL_DRAFT, EFFORT_*): extraction,
+    scoring and drafts run on the cheaper model; chat stays on the main model
   * every call's token usage is recorded (app/llm/usage.py) so costs are measured, not guessed
 """
 import logging
@@ -20,7 +20,7 @@ log = logging.getLogger(__name__)
 
 # Structured, checkable, high-volume work: the fast model handles it.
 FAST_TASKS = {"extract_startups", "score_matches", "extract_founders", "extract_profile"}
-# The user reads these word for word.
+# The user (and founders) read these word for word: their own model setting.
 DRAFT_TASKS = {"draft_email", "humanize", "followup", "dm_note"}
 
 
@@ -30,7 +30,7 @@ def route(task: str) -> tuple[str, str]:
     if task in FAST_TASKS:
         return s.anthropic_model_fast or s.anthropic_model, s.effort_extract
     if task in DRAFT_TASKS:
-        return s.anthropic_model, s.effort_draft
+        return s.anthropic_model_draft or s.anthropic_model, s.effort_draft
     return s.anthropic_model, s.effort_chat
 
 
