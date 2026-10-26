@@ -4,9 +4,18 @@ Business details come from settings (BUSINESS_NAME, SUPPORT_EMAIL, BUSINESS_ADDR
 can be filled in without touching the text. The wording describes how FounderReach actually
 works; review it (ideally with a lawyer) before relying on it.
 """
+import hashlib
 from html import escape
+from pathlib import Path
 
 from app.config import get_settings
+
+_STATIC = Path(__file__).resolve().parent.parent / "static"
+
+
+def asset_v() -> str:
+    """Changes whenever the CSS or JS changes, so browsers fetch the new files, not a stale cached copy."""
+    return hashlib.sha256(b"".join((_STATIC / f).read_bytes() for f in ("styles.css", "app.js"))).hexdigest()[:10]
 
 UPDATED = "26 October 2026"  # bump when the wording or prices change
 
@@ -21,11 +30,11 @@ _SHELL = """<!doctype html>
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&display=swap" rel="stylesheet">
   <link rel="icon" href="/favicon.ico" sizes="any">
   <link rel="icon" href="/static/brand/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/styles.css?v={v}">
 </head>
 <body>
   <main class="legal">
-    <a class="logo" href="/"><img class="lockup" src="/static/brand/lockup-horizontal.svg" alt="FounderReach" width="217" height="42"><img class="mark" src="/static/brand/mark.svg" alt="" width="34" height="34"></a>
+    <a class="logo" href="/"><img class="lockup" src="/static/brand/lockup-horizontal.svg" alt="FounderReach" width="217" height="42"></a>
     <h1>{title}</h1>
     <p class="fine">Last updated {updated}</p>
     {body}
@@ -46,7 +55,7 @@ def _who() -> dict:
 
 
 def _page(title: str, body: str) -> str:
-    return _SHELL.format(title=escape(title), updated=UPDATED, body=body)
+    return _SHELL.format(title=escape(title), updated=UPDATED, body=body, v=asset_v())
 
 
 def terms() -> str:

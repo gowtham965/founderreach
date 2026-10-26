@@ -68,7 +68,6 @@ a { color: var(--a1); }
 .logo { display: inline-flex; align-items: center; text-decoration: none; flex: none; }
 .logo img { display: block; }
 .logo .lockup { height: 42px; width: auto; margin-left: -8px; }
-.logo .mark { display: none; height: 34px; width: 34px; }
 .nav-links { display: none; gap: 1.6rem; margin-left: 2rem; }
 .nav-links a { color: var(--soft); text-decoration: none; }
 .nav-links a:hover { color: var(--ink); }
@@ -303,7 +302,6 @@ a { color: var(--a1); }
 .gmail-pill { border: 1px solid var(--line-strong); background: var(--card); border-radius: 999px; padding: 0.4rem 0.9rem; font-size: 0.88rem; cursor: pointer; white-space: nowrap; color: var(--ink); }
 .gmail-pill:hover { border-color: var(--ink); }
 .gmail-pill.on { color: var(--ok); border-color: rgba(18,161,80,0.45); }
-@media (max-width: 480px) { .top .logo .lockup { display: none; } .top .logo .mark { display: block; } }
 
 .banner { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.6rem; margin: 0.7rem 16px 0; padding: 0.6rem 0.95rem;
   border-radius: var(--r-sm); font-size: 0.92rem; background: #eef0ff; border: 1px solid #cfd4ff; color: var(--ink); }
@@ -375,6 +373,7 @@ a { color: var(--a1); }
 .send:disabled { opacity: .45; cursor: default; transform: none; }
 
 .top .logo .lockup { height: 38px; }
+@media (max-width: 480px) { .top .logo .lockup { height: 32px; } }
 .me { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; flex: none; background: var(--ink); color: #fff; font-weight: 800; font-size: .95rem; }
 .me:empty { display: none; }
 

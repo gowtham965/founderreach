@@ -92,7 +92,10 @@ app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 @app.api_route("/", include_in_schema=False, methods=["GET", "HEAD"])
 def index():
-    return FileResponse(STATIC / "index.html")
+    v = pages.asset_v()  # versioned links: after a deploy, browsers load the new CSS and JS
+    return HTMLResponse((STATIC / "index.html").read_text()
+                        .replace('/static/styles.css"', f'/static/styles.css?v={v}"')
+                        .replace('/static/app.js"', f'/static/app.js?v={v}"'))
 
 
 # ---------- auth ----------
