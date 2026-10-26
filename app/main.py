@@ -11,6 +11,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import httpx
 from fastapi import BackgroundTasks, Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -19,11 +20,11 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app import agent, pages, scheduler
-from app.auth import create_token, current_user, decode_payload, decode_token, hash_password, session_token, verify_password
+from app.auth import create_token, current_user, decode_payload, decode_token, hash_password, is_admin, session_token, verify_password
 from app.config import get_settings
 from app.db import SessionLocal, get_db, init_db
-from app.models import ChatMessage, Match, Startup, User
-from app.services import discovery, email_check, google_login, mailer, matching, outreach, profile as profile_svc
+from app.models import ChatMessage, Match, Payment, Startup, User
+from app.services import billing, discovery, email_check, google_login, mailer, matching, outreach, profile as profile_svc
 from app.services import wa_bot, whatsapp
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -330,7 +331,7 @@ def me(user: User = Depends(current_user), db: Session = Depends(get_db)):
     p = profile_svc.get_or_create_profile(db, user)
     return {"email": user.email, "name": user.name,
             "email_verified": bool(user.email_verified_at), "linkedin": (p.links or {}).get("linkedin"),
-            "is_admin": is_admin(user), "can_confirm": email_signup_open(),
+            "is_admin": is_admin(user), "can_confirm": email_signup_open(), "billing": billing.summary(user),
             "profile": {"summary": p.summary, "skills": p.skills, "highlights": p.highlights,
                         "target_roles": p.target_roles, "preferences": p.preferences, "ready": p.is_ready()}}
 
@@ -339,6 +340,8 @@ def me(user: User = Depends(current_user), db: Session = Depends(get_db)):
 def delete_account(user: User = Depends(current_user), db: Session = Depends(get_db)):
     """'Delete everything in one tap.'"""
     db.query(ChatMessage).filter(ChatMessage.user_id == user.id).delete()
+    # payment records stay (refunds, accounts) but no longer point at the account
+    db.query(Payment).filter(Payment.user_id == user.id).update({Payment.user_id: None})
     for m in db.scalars(select(Match).where(Match.user_id == user.id)).all():
         db.delete(m)
     db.delete(user)
@@ -407,6 +410,8 @@ class DraftEditIn(BaseModel):
 def _act(fn):
     try:
         return fn()
+    except billing.PaywallError as exc:
+        raise HTTPException(402, str(exc)) from exc
     except outreach.OutreachError as exc:
         raise HTTPException(400, str(exc)) from exc
     except HTTPException:
@@ -467,14 +472,63 @@ def api_stop(match_id: int, user: User = Depends(current_user), db: Session = De
     return matching.match_card(o.match)
 
 
+# ---------- passes & PhonePe ----------
+class PayIn(BaseModel):
+    plan: str
+
+
+@app.post("/api/pay")
+def api_pay(body: PayIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Start a PhonePe payment; the browser goes to the returned PhonePe page."""
+    try:
+        return {"redirect_url": billing.create_order(db, user, body.plan)}
+    except billing.PaymentError as exc:
+        raise HTTPException(400 if not billing.payments_on() or body.plan not in billing.PLANS else 503, str(exc)) from exc
+    except httpx.HTTPError as exc:
+        logging.getLogger(__name__).exception("PhonePe unreachable")
+        raise HTTPException(503, "Couldn't reach PhonePe. Please try again in a few minutes.") from exc
+
+
+@app.get("/pay/return", include_in_schema=False)
+def pay_return(o: str = ""):
+    """PhonePe sends the browser back here. The app then checks the order (signed in) and shows the result."""
+    return RedirectResponse(f"/?paid={o}" if billing.ORDER_ID_RE.match(o) else "/", status_code=303)
+
+
+@app.post("/api/pay/{order_id}/check")
+def api_pay_check(order_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    pay = db.scalar(select(Payment).where(Payment.merchant_order_id == order_id, Payment.user_id == user.id))
+    if pay is None:
+        raise HTTPException(404, "No such payment")
+    try:
+        pay = billing.refresh(db, pay)
+    except (billing.PaymentError, httpx.HTTPError):
+        logging.getLogger(__name__).exception("PhonePe status check failed")
+    db.refresh(user)
+    return {"state": pay.state, "plan": pay.plan, "billing": billing.summary(user)}
+
+
+@app.post("/api/pay/webhook", include_in_schema=False)
+async def pay_webhook(request: Request, db: Session = Depends(get_db)):
+    """PhonePe's server-to-server notice. The body is only a hint: the status comes from PhonePe's API."""
+    if not billing.webhook_ok(request.headers.get("authorization")):
+        raise HTTPException(401, "bad signature")
+    try:
+        data = json.loads(await request.body())
+    except ValueError:
+        raise HTTPException(400, "bad json")
+    order_id = str(((data.get("payload") or {}) if isinstance(data, dict) else {}).get("merchantOrderId", ""))
+    pay = db.scalar(select(Payment).where(Payment.merchant_order_id == order_id)) if billing.ORDER_ID_RE.match(order_id) else None
+    if pay is not None:
+        try:
+            billing.refresh(db, pay)
+        except (billing.PaymentError, httpx.HTTPError):
+            logging.getLogger(__name__).exception("PhonePe status check failed (webhook)")
+            raise HTTPException(503, "try again")  # PhonePe retries
+    return {"ok": True}
+
+
 # ---------- admin ----------
-def is_admin(user: User) -> bool:
-    """Listed in ADMIN_EMAILS *and* proven to own that address (confirmed, or Google sign-in).
-    Otherwise anyone could sign up with the admin's email first and become admin."""
-    admins = {e.strip().lower() for e in get_settings().admin_emails.split(",") if e.strip()}
-    return bool(user.email_verified_at) and user.email.lower() in admins
-
-
 @app.post("/api/admin/discover")
 def run_discovery_now(user: User = Depends(current_user)):
     """Kick off a discovery run in the background. Admins only: each run can spend AI credits."""

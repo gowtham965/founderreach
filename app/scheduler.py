@@ -14,7 +14,7 @@ from sqlalchemy import select
 from app.config import get_settings
 from app.db import SessionLocal
 from app.models import User
-from app.services import discovery, matching, outreach
+from app.services import billing, discovery, matching, outreach
 
 log = logging.getLogger(__name__)
 _scheduler: BackgroundScheduler | None = None
@@ -30,6 +30,8 @@ def wants_daily_matches(user: User, now: datetime | None = None) -> bool:
     credits, and nobody reads the 40th morning message in a row."""
     if not user.email_verified_at or not user.profile or not user.profile.is_ready():
         return False
+    if not billing.has_access(user, now):  # trial over, no pass: no new matches (or AI cost)
+        return False
     now = now or datetime.now(timezone.utc)
     seen = [t.replace(tzinfo=timezone.utc) if t.tzinfo is None else t
             for t in (user.last_seen_at, user.whatsapp_last_inbound_at, user.created_at) if t]
@@ -42,6 +44,7 @@ def job_daily_matches():
             try:
                 if not wants_daily_matches(user):
                     continue
+                billing.require_access(db, user)  # morning matches count as use: starts the trial clock
                 new = matching.find_matches(db, user)
                 if not new:
                     continue

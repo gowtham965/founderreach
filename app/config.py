@@ -11,6 +11,15 @@ class Settings(BaseSettings):
     # Shown on the Terms, Privacy, Refunds and Contact pages (payment gateways check these)
     business_name: str = "Gowtham R Gowda"
     support_email: str = ""
+    # PhonePe Payment Gateway (Standard Checkout v2). Payments, and the trial limits, are off until the keys are set.
+    phonepe_client_id: str = ""
+    phonepe_client_secret: str = ""
+    phonepe_client_version: str = "1"
+    phonepe_env: str = "sandbox"  # "sandbox" for testing, "production" for real money
+    phonepe_webhook_user: str = ""  # the username and password set on the webhook in PhonePe's dashboard
+    phonepe_webhook_password: str = ""
+    trial_days: int = 2
+    trial_drafts: int = 5
     cf_analytics_token: str = ""  # Cloudflare Web Analytics site token; empty = no traffic stats
     business_address: str = ""  # full postal address; payment gateways usually require it
     # Emails allowed to run admin actions (e.g. refreshing the startup pool), comma separated

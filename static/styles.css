@@ -417,6 +417,7 @@ a { color: var(--a1); }
 .conf.verified, .conf.public, .conf.user { color: var(--ok); }
 .conf.likely, .conf.inbox { color: var(--info); }
 .conf.guess { color: var(--warn); }
+.conf:empty { display: none; }
 .alts { margin: 0.25rem 0 0.4rem; font-family: var(--font-ui); font-size: 0.85rem; color: var(--soft); }
 .alts button { border: 0; background: none; padding: 0; color: var(--a1); text-decoration: underline; cursor: pointer; font-size: inherit; }
 .extra { margin-top: 0.8rem; font-size: 0.92rem; }
@@ -449,3 +450,46 @@ a { color: var(--a1); }
   .letter.sent-now .postmark { animation: stamp 420ms cubic-bezier(.2,1.6,.4,1); }
   @keyframes stamp { from { transform: scale(1.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 }
+
+/* ---- trial & passes ---- */
+.plan-pill { border: 1px solid var(--line-strong); background: var(--card); color: var(--ink); border-radius: 999px; padding: .38rem .8rem;
+  font: 600 .82rem var(--font-ui); cursor: pointer; white-space: nowrap; transition: border-color .15s, color .15s; }
+.plan-pill:hover { border-color: var(--a1); color: var(--a1); }
+.plan-pill.paid { color: var(--ok); border-color: rgba(18,161,80,.4); background: #f1fbf5; }
+.plan-pill.locked { color: #fff; background: var(--grad); border-color: transparent; }
+@media (max-width: 560px) {
+  .plan-pill { font-size: .74rem; padding: .32rem .6rem; } .top { gap: .4rem; }
+  .plan-pill:not([hidden]) ~ .me { display: none; }  /* room for the plan badge; the avatar is decoration */
+  .top .tabs button { padding: .38rem .7rem; }
+}
+
+.plans { width: min(560px, calc(100vw - 32px)); border: 0; border-radius: 26px; padding: 1.8rem 1.5rem 1.4rem; background: var(--bg); color: var(--ink);
+  box-shadow: 0 40px 90px -30px rgba(18,20,32,.55); }
+.plans::backdrop { background: rgba(18,20,32,.45); backdrop-filter: blur(3px); }
+.plans h2 { margin: 0 2rem .35rem 0; font-size: 1.55rem; font-weight: 800; letter-spacing: -.02em; }
+.plans-why { margin: 0 0 1.2rem; color: var(--soft); }
+.plans .x { position: absolute; top: 14px; right: 14px; width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line); background: var(--card);
+  font-size: 1.3rem; line-height: 1; cursor: pointer; color: var(--soft); }
+.plans .x:hover { color: var(--ink); }
+.plan-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; }
+@media (max-width: 480px) { .plan-grid { grid-template-columns: 1fr; } }
+.plan { position: relative; background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 1.15rem; display: grid; gap: .3rem; align-content: start; }
+.plan.best { border: 2px solid var(--a1); box-shadow: 0 20px 40px -26px rgba(91,108,255,.7); }
+.plan h3 { margin: 0; font-size: .95rem; color: var(--soft); font-weight: 700; }
+.plan-price { margin: 0; font-size: 2.1rem; font-weight: 800; letter-spacing: -.03em; line-height: 1.1; }
+.plan-price small { font-size: .95rem; font-weight: 600; color: var(--soft); letter-spacing: 0; }
+.plan-per { margin: 0 0 .7rem; font-size: .85rem; color: var(--faint); }
+.plan .btn { width: 100%; justify-content: center; font-size: .92rem; }
+.plan-tag { position: absolute; top: -11px; right: 14px; background: var(--grad); color: #fff; font-size: .72rem; font-weight: 700; padding: .15rem .6rem; border-radius: 999px; }
+.plans .fine { margin-top: .9rem; }
+.plans .error:empty { display: none; }
+@media (max-width: 420px) {  /* small phones: the same logo image, cropped to its route mark */
+  .top .logo .lockup { width: 34px; height: 34px; object-fit: cover; object-position: 3px center; }
+  .top { padding: .7rem 12px; gap: .35rem; }
+  .top .tabs button { padding: .32rem .55rem; font-size: .86rem; }
+  .top .tabs { padding: 3px; }
+  .plan-pill { padding: .3rem .55rem; }
+}
+/* grids size to their widest content by default; let the app shrink to small phones */
+.app, .chat { grid-template-columns: minmax(0, 1fr); }
+.composer textarea { min-width: 0; }

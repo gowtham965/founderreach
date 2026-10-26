@@ -218,6 +218,7 @@
           <button role="tab" data-tab="chat" aria-selected="true">Chat</button>
           <button role="tab" data-tab="pipeline" aria-selected="false">Pipeline</button>
         </nav>
+        <button type="button" class="plan-pill" id="plan-pill" hidden></button>
         <span class="me" id="me-avatar" aria-hidden="true"></span>
       </header>
       <p class="banner" id="banner" role="status" hidden><span id="banner-text"></span> <button type="button" id="resend-btn" hidden>Resend</button></p>
@@ -233,7 +234,7 @@
             <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M16.5 6.5v9.2a4.5 4.5 0 0 1-9 0V5.6a3 3 0 0 1 6 0v9.6a1.5 1.5 0 0 1-3 0V7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
             <span class="sr">Attach resume or LinkedIn PDF</span>
           </label>
-          <textarea id="input" rows="1" placeholder="Ask for startups, a draft, a follow-up…" aria-label="Message"></textarea>
+          <textarea id="input" rows="1" placeholder="Ask for startups or a draft…" aria-label="Message"></textarea>
           <button class="send" id="send-btn" aria-label="Send">
             <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M12 19V5M5.5 11.5 12 5l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
@@ -251,6 +252,16 @@
       <div id="pipe-list"></div>
     </section>
   </div>
+
+  <dialog id="plans" class="plans" aria-labelledby="plans-h">
+    <button type="button" class="x" id="plans-close" aria-label="Close">×</button>
+    <h2 id="plans-h">Keep reaching founders</h2>
+    <p class="plans-why" id="plans-why">New matches every morning, founder emails, drafts in your voice and follow-up reminders.</p>
+    <div class="plan-grid" id="plan-grid"></div>
+    <p class="error" id="plans-error" role="alert"></p>
+    <p class="fine">One-time payment through PhonePe: UPI, cards or netbanking. Never renews by itself.
+      Everything you already have stays yours. <a href="/refunds" target="_blank" rel="noopener">Refund policy</a></p>
+  </dialog>
 
   <template id="letter-tpl">
     <article class="letter">

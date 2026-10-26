@@ -83,3 +83,10 @@ def touch(db: Session, user: User) -> None:
     if last is None or now - last > timedelta(hours=1):
         user.last_seen_at = now
         db.commit()
+
+
+def is_admin(user) -> bool:
+    """Listed in ADMIN_EMAILS *and* proven to own that address (confirmed, or Google sign-in).
+    Otherwise anyone could sign up with the admin's email first and become admin."""
+    admins = {e.strip().lower() for e in get_settings().admin_emails.split(",") if e.strip()}
+    return bool(user.email_verified_at) and user.email.lower() in admins

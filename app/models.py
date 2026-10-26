@@ -47,6 +47,10 @@ class User(Base):
     # AI drafts used today (cost cap); day is an ISO date string
     drafts_day: Mapped[str | None] = mapped_column(String(10), nullable=True)
     drafts_used: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Free trial (starts at the first paid action) and paid passes (see app/services/billing.py)
+    trial_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    trial_drafts_used: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    pass_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     profile: Mapped["Profile"] = relationship(back_populates="user", uselist=False, cascade="all, delete-orphan")
 
@@ -166,3 +170,18 @@ class ChatMessage(Base):
     # {"type": "draft", "id": n}]); rebuilt from current data on load, so they show today's state.
     cards: Mapped[list | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class Payment(Base):
+    """One PhonePe order. Kept after account deletion (user_id is then cleared) for refunds and accounts."""
+    __tablename__ = "payments"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    email: Mapped[str] = mapped_column(String(255), default="")
+    merchant_order_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    phonepe_order_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    plan: Mapped[str] = mapped_column(String(16))
+    amount_paise: Mapped[int] = mapped_column(Integer)
+    state: Mapped[str] = mapped_column(String(16), default="CREATED")  # CREATED, PENDING, COMPLETED, FAILED
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # pass turned on

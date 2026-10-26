@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.llm import Tool, get_llm
 from app.models import ChatMessage, Match, User
-from app.services import discovery, matching, outreach, profile as profile_svc
+from app.services import billing, discovery, matching, outreach, profile as profile_svc
 
 log = logging.getLogger(__name__)
 
@@ -145,6 +145,7 @@ def _run_tool(db: Session, user: User, name: str, args: dict, latest_user_text: 
         if name == "find_matches":
             if not user.profile or not user.profile.is_ready():
                 return {"ok": False, "error": "Profile incomplete: need a summary plus skills or target roles"}
+            billing.require_access(db, user)
             new = matching.find_matches(db, user)
             items = [matching.match_card(m) for m in new]
             if items:

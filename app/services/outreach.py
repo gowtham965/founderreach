@@ -103,6 +103,8 @@ def draft(db: Session, user: User, match_id: int, instructions: str = "") -> Out
     if o and o.status not in ("draft", "cancelled", "failed"):
         raise OutreachError(f"Email to {m.startup.name} is already {o.status}; it can't be redrafted")
     _use_draft_quota(db, user)
+    from app.services import billing  # billing imports this module
+    billing.use_draft(db, user)
     if o is None:
         o = Outreach(match_id=m.id, user_id=user.id)
         m.outreach = o  # keep the cached relationship in sync (sessions don't expire on commit)
@@ -186,6 +188,8 @@ def make_dm(db: Session, user: User, match_id: int) -> Outreach:
     m = _owned_match(db, user, match_id)
     if m.outreach is None:
         raise OutreachError("Draft the email first")
+    from app.services import billing
+    billing.require_access(db, user)
     enrich_startup(db, m.startup)
     m.outreach.dm_note = write_dm(user, m)
     db.commit()
@@ -299,6 +303,9 @@ def prepare_due_followups(db: Session) -> int:
                 db.commit()
                 continue
             user = db.get(User, o.user_id)
+            from app.services import billing
+            if not billing.has_access(user):  # stays due: drafted once they get a pass
+                continue
             data = get_llm().complete_json(
                 followup_system(),
                 f"Candidate:\n{profile_brief(user.profile)}\nName: {user.name}\n\nOriginal email:\n{o.body}\n\n"

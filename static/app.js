@@ -12,7 +12,9 @@ async function api(path, opts = {}) {
   const res = await fetch(path, { ...opts, headers });
   if (res.status === 401 && store.token) { store.token = null; showAuth(); throw new Error("Signed out"); }
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : data.detail?.[0]?.msg || `Request failed (${res.status})`);
+  const msg = typeof data.detail === "string" ? data.detail : data.detail?.[0]?.msg || `Request failed (${res.status})`;
+  if (res.status === 402) openPlans(msg);  // trial over: offer a pass right where they hit the wall
+  if (!res.ok) throw new Error(msg);
   return data;
 }
 
@@ -615,12 +617,90 @@ let justVerified = null;  // "1" or "expired", from the confirmation link's redi
   if (v) { justVerified = v; history.replaceState({}, "", "/"); }
 }
 
+/* ---------- trial & passes (PhonePe) ---------- */
+let billing = null;
+const fmtDate = iso => new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+function renderBilling(b) {
+  billing = b;
+  const pill = $("#plan-pill");
+  pill.hidden = !b?.payments;
+  if (pill.hidden) return;
+  pill.classList.toggle("locked", !b.access);
+  pill.classList.toggle("paid", !!b.pass_until);
+  if (b.pass_until) pill.textContent = `Pass · till ${fmtDate(b.pass_until)}`;
+  else if (!b.access) pill.textContent = "Get a pass";
+  else if (b.trial_ends) {
+    const hrs = Math.max(0, (new Date(b.trial_ends) - Date.now()) / 36e5);
+    const left = hrs >= 24 ? `${Math.ceil(hrs / 24)}d` : `${Math.ceil(hrs)}h`;
+    pill.textContent = `Trial · ${left} · ${b.trial_drafts_left} drafts`;
+  } else pill.textContent = `Free trial`;
+}
+function openPlans(why) {
+  if (!billing?.payments) return;
+  $("#plans-why").textContent = why || "New matches every morning, founder emails, drafts in your voice and follow-up reminders.";
+  $("#plans-error").textContent = "";
+  const grid = $("#plan-grid"); grid.textContent = "";
+  for (const p of billing.plans) {
+    const best = p.days >= 30;
+    const card = el("div", `plan${best ? " best" : ""}`);
+    if (best) card.append(el("span", "plan-tag", "Best value"));
+    const price = el("p", "plan-price"); price.append(`₹${p.price}`, el("small", "", ` / ${p.days} days`));
+    const buy = el("button", `btn ${best ? "primary" : "dark"}`, `Pay ₹${p.price} with PhonePe`); buy.type = "button";
+    buy.addEventListener("click", async () => {
+      grid.querySelectorAll("button").forEach(b => b.disabled = true);
+      buy.textContent = "Opening PhonePe…";
+      try {
+        const { redirect_url } = await api("/api/pay", { method: "POST", json: { plan: p.id } });
+        if (!/^https:\/\/[^/]*phonepe\.com\//.test(redirect_url)) throw new Error("Unexpected payment page. Please try again.");
+        location.assign(redirect_url);
+      } catch (err) {
+        $("#plans-error").textContent = err.message;
+        grid.querySelectorAll("button").forEach(b => b.disabled = false);
+        buy.textContent = `Pay ₹${p.price} with PhonePe`;
+      }
+    });
+    card.append(el("h3", "", p.label), price, el("p", "plan-per", `about ₹${Math.round(p.price / p.days)} a day`), buy);
+    grid.appendChild(card);
+  }
+  const d = $("#plans");
+  if (!d.open) d.showModal();
+}
+$("#plan-pill").addEventListener("click", () => openPlans(billing?.pass_until
+  ? `Your pass runs till ${fmtDate(billing.pass_until)}. Buying another adds to it.` : ""));
+$("#plans-close").addEventListener("click", () => $("#plans").close());
+$("#plans").addEventListener("click", e => { if (e.target.id === "plans") $("#plans").close(); });  // tap outside
+
+// Back from PhonePe: /pay/return sends people to /?paid=<order>. Ask our server (which asks PhonePe) what happened.
+let paidOrder = null;
+{
+  const o = new URLSearchParams(location.search).get("paid");
+  if (o) { paidOrder = o; history.replaceState({}, "", "/"); }
+}
+async function checkPayment(order) {
+  banner("Checking your payment with PhonePe…");
+  for (let i = 0; i < 10; i++) {
+    let r;
+    try { r = await api(`/api/pay/${encodeURIComponent(order)}/check`, { method: "POST" }); }
+    catch (err) { banner(err.message, "warn"); return; }
+    renderBilling(r.billing);
+    if (r.state === "COMPLETED" && r.billing.pass_until) {
+      banner(`Payment received ✓ Your pass is active till ${fmtDate(r.billing.pass_until)}. Happy hunting!`, "ok"); return;
+    }
+    if (r.state === "FAILED") {
+      banner("The payment didn't go through, so no pass was added. If money left your account, write to us from the Contact page.", "warn"); return;
+    }
+    await new Promise(res => setTimeout(res, 3000));
+  }
+  banner("PhonePe is still confirming your payment. Your pass turns on by itself once it does; check back in a few minutes.");
+}
+
 /* ---------- account ---------- */
 async function refreshMe() {
   const me = await api("/api/me");
   myName = me.name || "";
   $("#me-avatar").textContent = (me.name || me.email || "?").trim()[0].toUpperCase();
   quick(me.profile);
+  renderBilling(me.billing);
   $("#discover-btn").hidden = !me.is_admin;  // refreshing spends AI credits: admin only
   if (me.email_verified) banner(justVerified === "1" ? "Email confirmed ✓ Founder emails and drafts are unlocked." : "", "ok");
   else if (justVerified === "expired") banner("That confirmation link has expired. Send yourself a new one:", "warn", true);
@@ -640,6 +720,7 @@ async function boot() {
   }
   $("#auth").hidden = true; $("#app").hidden = false;
   try { await refreshMe(); await loadChat(); } catch { return; }
+  if (paidOrder) { const o = paidOrder; paidOrder = null; checkPayment(o); }
 }
 setInterval(poll, 30000);
 boot();
