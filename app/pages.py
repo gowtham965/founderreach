@@ -19,11 +19,13 @@ _SHELL = """<!doctype html>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&display=swap" rel="stylesheet">
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" href="/static/brand/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
   <main class="legal">
-    <a class="logo" href="/"><i></i>FounderReach</a>
+    <a class="logo" href="/"><img class="lockup" src="/static/brand/lockup-horizontal.svg" alt="FounderReach" width="217" height="42"><img class="mark" src="/static/brand/mark.svg" alt="" width="34" height="34"></a>
     <h1>{title}</h1>
     <p class="fine">Last updated {updated}</p>
     {body}
