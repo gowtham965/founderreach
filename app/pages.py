@@ -8,7 +8,7 @@ from html import escape
 
 from app.config import get_settings
 
-UPDATED = "26 October 2026"
+UPDATED = "26 October 2026"  # bump when the wording or prices change
 
 _SHELL = """<!doctype html>
 <html lang="en">
@@ -80,8 +80,9 @@ interview or job.</p>
 
 <h2>Free trial and passes</h2>
 <ul>
-  <li>New accounts get a 2-day free trial. After that, using FounderReach for new matches, drafts and follow-up reminders needs a pass:
-      ₹100 for 7 days or ₹300 for 30 days (prices include applicable taxes unless stated otherwise at checkout).</li>
+  <li>New accounts get a 2-day free trial, including up to 5 email drafts. After that, using FounderReach for new matches, drafts and
+      follow-up reminders needs a pass: ₹199 for 7 days or ₹499 for 30 days (prices include applicable taxes unless stated otherwise
+      at checkout).</li>
   <li>Passes don't renew automatically. When a pass ends you keep access to what you already have.</li>
   <li>Payments are handled by our payment partner; we never see or store your card details. Refunds follow our
       <a href="/refunds">Refund Policy</a>.</li>
@@ -152,8 +153,9 @@ def refunds() -> str:
     return _page("Refund & Cancellation Policy", f"""
 <p>This policy covers payments to FounderReach, run by {w['name']}.</p>
 <ul>
-  <li><strong>Free trial:</strong> every new account gets 2 days free. No payment details are needed for the trial.</li>
-  <li><strong>Passes:</strong> ₹100 for 7 days or ₹300 for 30 days. Passes are one-time payments and <strong>never renew
+  <li><strong>Free trial:</strong> every new account gets 2 days free, including up to 5 email drafts. No payment details are needed
+      for the trial.</li>
+  <li><strong>Passes:</strong> ₹199 for 7 days or ₹499 for 30 days. Passes are one-time payments and <strong>never renew
       automatically</strong>, so there's nothing to cancel.</li>
   <li><strong>Refunds:</strong> if you haven't used a pass yet (no new matches or drafts since buying it), you can ask for a full refund
       within 24 hours of buying it. After that, or once it's been used, passes aren't refundable.</li>
