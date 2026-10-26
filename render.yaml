@@ -25,6 +25,8 @@ services:
         generateValue: true  # Render makes a random one; never reuse your local key
       - key: LLM_PROVIDER
         value: anthropic
+      - key: TRUSTED_PROXY_HOPS   # Cloudflare + Render's load balancer each append to X-Forwarded-For
+        value: "2"
       - key: BUSINESS_NAME
         value: Gowtham R Gowda
       - key: SUPPORT_EMAIL

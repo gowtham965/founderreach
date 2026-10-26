@@ -14,7 +14,8 @@ class Settings(BaseSettings):
     business_address: str = ""  # full postal address; payment gateways usually require it
     # Emails allowed to run admin actions (e.g. refreshing the startup pool), comma separated
     admin_emails: str = ""
-    # Proxies in front of the app that append to X-Forwarded-For (Render: 1; 0 = use the socket address)
+    # Proxies in front of the app that append to X-Forwarded-For (0 = use the socket address).
+    # Render on onrender.com/custom domains: 2 (Cloudflare, then Render's load balancer) — set in render.yaml.
     trusted_proxy_hops: int = 1
     base_url: str = "http://localhost:8000"
     secret_key: str = "change-me-in-production"

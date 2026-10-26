@@ -181,9 +181,9 @@ def _welcome(db: Session, user: User) -> None:
 
 
 def client_ip(request: Request) -> str:
-    """The visitor's IP. Behind Render's proxy, the proxy appends the address it saw to
-    X-Forwarded-For; anything to the left of that was written by the visitor and can be faked.
-    TRUSTED_PROXY_HOPS = how many proxies append (1 on Render)."""
+    """The visitor's IP. Each proxy in front of us appends the address it saw to X-Forwarded-For;
+    anything further left was written by the visitor and can be faked. TRUSTED_PROXY_HOPS = how many
+    proxies append (Render: 2, Cloudflare then its load balancer). Check it with GET /api/public/ip."""
     hops = get_settings().trusted_proxy_hops
     forwarded = [p.strip() for p in request.headers.get("x-forwarded-for", "").split(",") if p.strip()]
     if hops and len(forwarded) >= hops:
