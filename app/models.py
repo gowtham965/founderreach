@@ -158,4 +158,7 @@ class ChatMessage(Base):
     role: Mapped[str] = mapped_column(String(16))  # user | assistant
     content: Mapped[str] = mapped_column(Text)
     unread: Mapped[bool] = mapped_column(Boolean, default=False)  # agent-initiated notifications
+    # Startup cards shown with this reply, as match ids only ([{"type": "matches", "ids": [...]},
+    # {"type": "draft", "id": n}]); rebuilt from current data on load, so they show today's state.
+    cards: Mapped[list | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)

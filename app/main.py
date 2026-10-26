@@ -218,7 +218,8 @@ class ChatIn(BaseModel):
 @app.get("/api/chat")
 def chat_history(user: User = Depends(current_user), db: Session = Depends(get_db)):
     rows = db.scalars(select(ChatMessage).where(ChatMessage.user_id == user.id).order_by(ChatMessage.id)).all()
-    return [{"id": r.id, "role": r.role, "content": r.content, "unread": r.unread, "at": r.created_at.isoformat()} for r in rows[-100:]]
+    return [{"id": r.id, "role": r.role, "content": r.content, "unread": r.unread, "at": r.created_at.isoformat(),
+             "cards": agent.rebuild_cards(db, user, r.cards)} for r in rows[-100:]]
 
 
 @app.post("/api/chat")

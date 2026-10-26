@@ -298,7 +298,7 @@ function addCards(cards) {
 async function loadChat() {
   list.textContent = "";
   const rows = await api("/api/chat");
-  rows.forEach(r => addMsg(r.role, r.content, r.unread ? "unread" : ""));
+  rows.forEach(r => { addMsg(r.role, r.content, r.unread ? "unread" : ""); addCards(r.cards); });
   lastId = rows.length ? rows[rows.length - 1].id : 0;
 }
 async function poll() {
@@ -306,7 +306,7 @@ async function poll() {
   try {
     const rows = await api("/api/chat");
     const fresh = rows.filter(r => r.id > lastId);
-    if (fresh.length && !busy) { fresh.forEach(r => addMsg(r.role, r.content, r.unread ? "unread" : "")); lastId = rows[rows.length - 1].id; }
+    if (fresh.length && !busy) { fresh.forEach(r => { addMsg(r.role, r.content, r.unread ? "unread" : ""); addCards(r.cards); }); lastId = rows[rows.length - 1].id; }
   } catch {}
 }
 let busy = false;

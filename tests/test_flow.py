@@ -101,6 +101,29 @@ def test_find_matches_and_draft(client):
     test_find_matches_and_draft.match_id = vl["match_id"]
 
 
+def test_cards_come_back_after_reload_with_current_state(client):
+    h = auth(client)
+    mid = test_find_matches_and_draft.match_id
+    history = client.get("/api/chat", headers=h).json()
+    with_cards = [r for r in history if r["cards"]]
+    assert with_cards, "replies that showed startup cards should bring them back on reload"
+    matches_card = next(c for r in with_cards for c in r["cards"] if c["type"] == "matches")
+    assert {i["name"] for i in matches_card["items"]} == {"VectorLoop", "Ledgerly"}
+    draft_card = next(c for r in with_cards for c in r["cards"] if c["type"] == "draft")
+    assert draft_card["item"]["match_id"] == mid and draft_card["item"]["outreach"]["status"] == "draft"
+    # another user's history never carries these cards
+    r = client.post("/api/auth/signup", json={"email": "nocards@example.com", "password": "password123"})
+    other = client.get("/api/chat", headers={"Authorization": f"Bearer {r.json()['token']}"}).json()
+    assert not any(row["cards"] for row in other)
+
+
+def test_card_refs_keep_one_entry_per_startup():
+    item = lambda mid, status: {"match_id": mid, "outreach": {"status": status}}
+    cards = [{"type": "matches", "items": [item(1, None), item(2, None)]},
+             {"type": "draft", "item": item(1, "draft")}, {"type": "draft", "item": item(1, "sent")}]
+    assert agent.card_refs(cards) == [{"type": "matches", "ids": [1, 2]}, {"type": "draft", "id": 1}]
+
+
 def test_style_guide_is_used():
     assert "Email style guide" in outreach.draft_system()
 
