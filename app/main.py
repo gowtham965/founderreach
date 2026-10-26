@@ -63,11 +63,11 @@ app = FastAPI(title=get_settings().app_name, lifespan=lifespan)
 # never embeddable in another site's frame.
 _CSP = "; ".join([
     "default-src 'self'",
-    "script-src 'self'",
+    "script-src 'self' https://static.cloudflareinsights.com",  # Cloudflare Web Analytics (no cookies)
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",  # inline style attributes are used
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' data:",
-    "connect-src 'self'",
+    "connect-src 'self' https://cloudflareinsights.com",
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",
@@ -95,7 +95,8 @@ def index():
     v = pages.asset_v()  # versioned links: after a deploy, browsers load the new CSS and JS
     return HTMLResponse((STATIC / "index.html").read_text()
                         .replace('/static/styles.css"', f'/static/styles.css?v={v}"')
-                        .replace('/static/app.js"', f'/static/app.js?v={v}"'))
+                        .replace('/static/app.js"', f'/static/app.js?v={v}"')
+                        .replace("</body>", pages.analytics_tag() + "</body>"))
 
 
 # ---------- auth ----------

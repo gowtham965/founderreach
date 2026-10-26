@@ -52,3 +52,17 @@ def test_account_deletion_removes_everything(client):
     assert client.delete("/api/me", headers=h).json() == {"ok": True}
     assert client.get("/api/me", headers=h).status_code == 401
     assert client.post("/api/auth/login", json={"email": "delete-me@example.com", "password": "password123"}).status_code == 401
+
+
+def test_analytics_beacon_only_with_a_token(monkeypatch):
+    from fastapi.testclient import TestClient
+    from app import main
+    from app.config import get_settings
+    c = TestClient(main.app)
+    monkeypatch.setattr(get_settings(), "cf_analytics_token", "")
+    assert "cloudflareinsights" not in c.get("/").text and "cloudflareinsights" not in c.get("/terms").text
+    monkeypatch.setattr(get_settings(), "cf_analytics_token", "abc123")
+    for path in ("/", "/terms"):
+        r = c.get(path)
+        assert 'data-cf-beacon="{&quot;token&quot;: &quot;abc123&quot;}"' in r.text
+        assert "https://static.cloudflareinsights.com" in r.headers["content-security-policy"]

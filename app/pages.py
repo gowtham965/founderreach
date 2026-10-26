@@ -5,6 +5,7 @@ can be filled in without touching the text. The wording describes how FounderRea
 works; review it (ideally with a lawyer) before relying on it.
 """
 import hashlib
+import json
 from html import escape
 from pathlib import Path
 
@@ -40,8 +41,17 @@ _SHELL = """<!doctype html>
     {body}
     <nav class="legal-nav"><a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="/refunds">Refunds</a><a href="/contact">Contact</a><a href="/">Home</a></nav>
   </main>
-</body>
+{analytics}</body>
 </html>"""
+
+
+def analytics_tag() -> str:
+    """Cloudflare Web Analytics beacon: cookie-free visit counts. Off until CF_ANALYTICS_TOKEN is set."""
+    token = get_settings().cf_analytics_token.strip()
+    if not token:
+        return ""
+    beacon = escape(json.dumps({"token": token}), quote=True)
+    return f'<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon="{beacon}"></script>\n'
 
 
 def _who() -> dict:
@@ -55,7 +65,7 @@ def _who() -> dict:
 
 
 def _page(title: str, body: str) -> str:
-    return _SHELL.format(title=escape(title), updated=UPDATED, body=body, v=asset_v())
+    return _SHELL.format(title=escape(title), updated=UPDATED, body=body, v=asset_v(), analytics=analytics_tag())
 
 
 def terms() -> str:
@@ -126,7 +136,8 @@ def privacy() -> str:
   <li><strong>WhatsApp (if you use it):</strong> your phone number and the messages you send to our WhatsApp number.</li>
   <li><strong>Payments:</strong> which pass you bought and when. Card and UPI details are handled by our payment partner, not us.</li>
 </ul>
-<p>Your browser stores a sign-in token so you stay signed in. We don't use advertising or tracking cookies.</p>
+<p>Your browser stores a sign-in token so you stay signed in. We don't use advertising or tracking cookies. We count visits with
+Cloudflare Web Analytics, which doesn't use cookies and doesn't follow you across other sites.</p>
 
 <h2>How we use it</h2>
 <p>To match you with startups, write drafts and reminders in your voice, run your account, prevent abuse, and keep the service working.

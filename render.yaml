@@ -48,3 +48,5 @@ services:
         sync: false
       - key: HUNTER_API_KEY
         sync: false
+      - key: CF_ANALYTICS_TOKEN   # Cloudflare Web Analytics site token (public, shows in the page)
+        sync: false

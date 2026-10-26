@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     # Shown on the Terms, Privacy, Refunds and Contact pages (payment gateways check these)
     business_name: str = "Gowtham R Gowda"
     support_email: str = ""
+    cf_analytics_token: str = ""  # Cloudflare Web Analytics site token; empty = no traffic stats
     business_address: str = ""  # full postal address; payment gateways usually require it
     # Emails allowed to run admin actions (e.g. refreshing the startup pool), comma separated
     admin_emails: str = ""
