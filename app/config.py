@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     business_name: str = "Gowtham R Gowda"
     support_email: str = ""
     business_address: str = ""  # full postal address; payment gateways usually require it
+    # Emails allowed to run admin actions (e.g. refreshing the startup pool), comma separated
+    admin_emails: str = ""
     base_url: str = "http://localhost:8000"
     secret_key: str = "change-me-in-production"
     database_url: str = "sqlite:///./founderreach.db"

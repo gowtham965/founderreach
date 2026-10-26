@@ -566,6 +566,7 @@ let justVerified = null;  // "1" or "expired", from the confirmation link's redi
 /* ---------- account ---------- */
 async function refreshMe() {
   const me = await api("/api/me");
+  $("#discover-btn").hidden = !me.is_admin;  // refreshing spends AI credits: admin only
   if (me.email_verified) banner(justVerified === "1" ? "Email confirmed ✓ Founder emails and drafts are unlocked." : "", "ok");
   else if (justVerified === "expired") banner("That confirmation link has expired. Send yourself a new one:", "warn", true);
   else banner(`Confirm your email to see founder emails and drafts. We sent a link to ${me.email}.`, "", true);

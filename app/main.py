@@ -58,6 +58,35 @@ def _fill_empty_pool() -> None:
 
 
 app = FastAPI(title=get_settings().app_name, lifespan=lifespan)
+
+# Content Security Policy: only our own scripts; styles and fonts from us and Google Fonts;
+# never embeddable in another site's frame.
+_CSP = "; ".join([
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",  # inline style attributes are used
+    "font-src 'self' https://fonts.gstatic.com",
+    "img-src 'self' data:",
+    "connect-src 'self'",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "object-src 'none'",
+])
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    h = response.headers
+    h.setdefault("Content-Security-Policy", _CSP)
+    h.setdefault("X-Content-Type-Options", "nosniff")
+    h.setdefault("X-Frame-Options", "DENY")
+    h.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    h.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()")
+    if get_settings().base_url.startswith("https://"):
+        h.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+    return response
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 
@@ -144,11 +173,50 @@ def _welcome(db: Session, user: User) -> None:
     db.commit()
 
 
+# Failed sign-ins per email and per IP: 5 per email / 20 per IP in 15 minutes, then wait.
+_FAILS: dict[str, list[float]] = {}
+_FAIL_WINDOW, _MAX_PER_EMAIL, _MAX_PER_IP = 15 * 60, 5, 20
+
+
+def _recent_fails(key: str) -> list[float]:
+    import time
+    cutoff = time.monotonic() - _FAIL_WINDOW
+    fails = [t for t in _FAILS.get(key, []) if t > cutoff]
+    if fails:
+        _FAILS[key] = fails
+    else:
+        _FAILS.pop(key, None)
+    return fails
+
+
+def _login_blocked(email: str, ip: str) -> int:
+    """Seconds to wait, or 0 if this sign-in may be attempted."""
+    import time
+    for key, limit in ((f"e:{email}", _MAX_PER_EMAIL), (f"i:{ip}", _MAX_PER_IP)):
+        fails = _recent_fails(key)
+        if len(fails) >= limit:
+            return int(fails[0] + _FAIL_WINDOW - time.monotonic()) + 1
+    return 0
+
+
+def _record_fail(email: str, ip: str) -> None:
+    import time
+    if len(_FAILS) > 20000:  # keep memory bounded
+        _FAILS.clear()
+    for key in (f"e:{email}", f"i:{ip}"):
+        _FAILS.setdefault(key, []).append(time.monotonic())
+
+
 @app.post("/api/auth/login")
-def login(body: LoginIn, db: Session = Depends(get_db)):
-    user = db.scalar(select(User).where(User.email == body.email.lower()))
+def login(body: LoginIn, request: Request, db: Session = Depends(get_db)):
+    email, ip = body.email.lower(), (request.client.host if request.client else "?")
+    if wait := _login_blocked(email, ip):
+        raise HTTPException(429, f"Too many sign-in attempts. Try again in {max(1, round(wait / 60))} minute(s).")
+    user = db.scalar(select(User).where(User.email == email))
     if not user or not verify_password(body.password, user.password_hash):
+        _record_fail(email, ip)
         raise HTTPException(401, "Wrong email or password")
+    _FAILS.pop(f"e:{email}", None)  # a correct password clears that account's count
     return {"token": create_token(user.id)}
 
 
@@ -211,6 +279,7 @@ def me(user: User = Depends(current_user), db: Session = Depends(get_db)):
     p = profile_svc.get_or_create_profile(db, user)
     return {"email": user.email, "name": user.name,
             "email_verified": bool(user.email_verified_at), "linkedin": (p.links or {}).get("linkedin"),
+            "is_admin": is_admin(user),
             "profile": {"summary": p.summary, "skills": p.skills, "highlights": p.highlights,
                         "target_roles": p.target_roles, "preferences": p.preferences, "ready": p.is_ready()}}
 
@@ -333,9 +402,16 @@ def api_stop(match_id: int, user: User = Depends(current_user), db: Session = De
 
 
 # ---------- admin ----------
+def is_admin(user: User) -> bool:
+    admins = {e.strip().lower() for e in get_settings().admin_emails.split(",") if e.strip()}
+    return user.email.lower() in admins
+
+
 @app.post("/api/admin/discover")
 def run_discovery_now(user: User = Depends(current_user)):
-    """Kick off a discovery run in the background (handy right after first setup)."""
+    """Kick off a discovery run in the background. Admins only: each run can spend AI credits."""
+    if not is_admin(user):
+        raise HTTPException(403, "Only the FounderReach admin can refresh the startup pool")
     def work():
         with SessionLocal() as db:
             discovery.run_discovery(db)
