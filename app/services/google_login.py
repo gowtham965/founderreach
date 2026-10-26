@@ -66,11 +66,16 @@ def sign_in(db: Session, identity: dict) -> tuple[User, bool]:
         return user, False
     user = db.scalar(select(User).where(User.email == email))
     if user:  # existing password account with the same verified email: link it
+        if not user.email_verified_at:
+            # Nobody ever proved they own this address. It may have been registered by someone else
+            # to sit in wait ("pre-account hijacking"): drop that password and sign out all sessions.
+            user.password_hash = ""
+            user.session_epoch = (user.session_epoch or 0) + 1
         user.google_sub = sub
         user.email_verified_at = user.email_verified_at or now()  # Google just proved they own it
         db.commit()
         return user, False
-    user = User(email=email, name=(identity.get("name") or "").strip(), password_hash="", google_sub=sub,
+    user = User(email=email, name=(identity.get("name") or "").strip()[:100], password_hash="", google_sub=sub,
                 email_verified_at=now())
     db.add(user)
     db.commit()

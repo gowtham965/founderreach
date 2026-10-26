@@ -100,13 +100,19 @@ TOOLS = [
     Tool("get_status", "Summary of the user's search: matches, sends, replies.", {"type": "object", "properties": {}}),
 ]
 
-_SAID_SO = re.compile(r"\b(sent|send|mailed|emailed|done|replied|reply|responded|answered|wrote back|got back)\b", re.I)
-_NEGATE = re.compile(r"\b(don'?t|do not|not yet|haven'?t|didn'?t|no reply|wait|hold|never)\b", re.I)
+# Past tense only: "send it" / "did they reply?" ask for something, they don't report it.
+_SAID_SO = re.compile(r"\b(sent|mailed|emailed|replied|responded|answered|wrote back|got back|heard back)\b", re.I)
+_NEGATE = re.compile(r"\b(don'?t|do not|not yet|haven'?t|hasn'?t|didn'?t|no reply|not sent|wait|hold|never)\b", re.I)
 
 
 def user_said_so(text: str) -> bool:
-    """Pipeline changes (sent / replied) only when the user's own latest message says so."""
-    return bool(_SAID_SO.search(text)) and not _NEGATE.search(text)
+    """Pipeline changes (sent / replied) only when the user's own latest message reports it:
+    some statement (not a question) has a past-tense 'sent'/'replied' and no negation."""
+    for sentence in re.findall(r"[^.!?\n]+[.!?]?", text):
+        s = sentence.strip()
+        if s and not s.endswith("?") and _SAID_SO.search(s) and not _NEGATE.search(s):
+            return True
+    return False
 
 
 def _history(db: Session, user: User, keep: int = 30, step: int = 10) -> list[dict]:
@@ -196,6 +202,8 @@ def _run_tool(db: Session, user: User, name: str, args: dict, latest_user_text: 
         return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
 
 
+AI_UNAVAILABLE = "Sorry, my AI side isn't available right now. Please try again in a few minutes."
+
 WHATSAPP_NOTE = """
 
 The user is chatting on WhatsApp, not the website. Files come in via 📎 → Document (not a
@@ -225,19 +233,24 @@ def respond(db: Session, user: User, text: str, max_steps: int = 6, channel: str
         # per-turn notes ride in the user turn, so the cached system prompt stays byte-stable
         messages[-1]["content"] += "\n\n" + just_saved
     cards: list[dict] = []
-    llm = get_llm()
     reply = ""
-    for _ in range(max_steps):
-        resp = llm.chat(system, messages, TOOLS, task="chat", cache_history=True)
-        if not resp.tool_calls:
-            reply = resp.text.strip()
-            break
-        messages.append({"role": "assistant", "content": resp.text, "tool_calls": [tc.as_dict() for tc in resp.tool_calls]})
-        for tc in resp.tool_calls:
-            result = _run_tool(db, user, tc.name, tc.input or {}, text, cards)
-            messages.append({"role": "tool", "tool_call_id": tc.id, "name": tc.name, "content": json.dumps(result, default=str)})
-    else:
-        reply = "I got a bit tangled there. Could you say that again?"
+    try:
+        llm = get_llm()
+        for _ in range(max_steps):
+            resp = llm.chat(system, messages, TOOLS, task="chat", cache_history=True)
+            if not resp.tool_calls:
+                reply = resp.text.strip()
+                break
+            messages.append({"role": "assistant", "content": resp.text, "tool_calls": [tc.as_dict() for tc in resp.tool_calls]})
+            for tc in resp.tool_calls:
+                result = _run_tool(db, user, tc.name, tc.input or {}, text, cards)
+                messages.append({"role": "tool", "tool_call_id": tc.id, "name": tc.name, "content": json.dumps(result, default=str)})
+        else:
+            reply = "I got a bit tangled there. Could you say that again?"
+    except Exception:  # missing key, outage, rate limit: answer anyway, never leave the message hanging
+        log.exception("chat reply failed for user %s", user.id)
+        db.rollback()
+        reply = AI_UNAVAILABLE
 
     reply = reply or "Done."
     db.add(ChatMessage(user_id=user.id, role="assistant", content=reply, cards=card_refs(cards) or None))

@@ -32,7 +32,7 @@ def welcome(user: User) -> str:
 
 
 def dashboard_link(user: User) -> str:
-    token = create_token(user.id, purpose="magic", minutes=15)
+    token = create_token(user.id, purpose="magic", minutes=15, epoch=user.session_epoch)
     return f"{get_settings().base_url.rstrip('/')}/api/auth/magic?token={token}"
 
 

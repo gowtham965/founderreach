@@ -22,3 +22,10 @@ def offline_email_domains(monkeypatch, request):
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "real_email_dns: use email_check's own DNS logic (with a fake resolver)")
+
+
+@pytest.fixture(autouse=True)
+def reset_signup_limit():
+    """Every test signs up from the same test client: start each one with a clean per-IP count."""
+    from app import main
+    main._SIGNUPS.clear()

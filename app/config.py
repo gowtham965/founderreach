@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     business_address: str = ""  # full postal address; payment gateways usually require it
     # Emails allowed to run admin actions (e.g. refreshing the startup pool), comma separated
     admin_emails: str = ""
+    # Proxies in front of the app that append to X-Forwarded-For (Render: 1; 0 = use the socket address)
+    trusted_proxy_hops: int = 1
     base_url: str = "http://localhost:8000"
     secret_key: str = "change-me-in-production"
     database_url: str = "sqlite:///./founderreach.db"
@@ -95,6 +97,7 @@ class Settings(BaseSettings):
     max_drafts_per_day: int = 15  # AI drafts per user per day (new, rewrites, follow-ups): bounds AI cost
     followup_days: str = "3,7"  # follow-up reminders, days after the user marks the email sent
     daily_matches: int = 5
+    match_active_days: int = 7  # morning matches only for people who used the app this recently
     scheduler_enabled: bool = True
     digest_hour_ist: int = 8
 

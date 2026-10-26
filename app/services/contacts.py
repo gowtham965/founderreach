@@ -133,9 +133,14 @@ def linkedin_search_url(name: str, company: str) -> str:
 
 
 # ---------------------------------------------------------------- 1. names
-def yc_founders(company_name: str, yc_url: str = "") -> list[dict]:
-    """Founder names from the public YC company page."""
-    url = yc_url if "ycombinator.com/companies/" in (yc_url or "") else \
+def yc_founders(company_name: str, yc_url: str = "", domain: str | None = None) -> list[dict]:
+    """Founder names from the public YC company page.
+
+    With a known YC link, use it. Otherwise the page address is guessed from the company name,
+    which can belong to a different company with the same name: then the YC page's website must
+    match the startup's domain, or we'd draft emails to the wrong founders."""
+    guessed = "ycombinator.com/companies/" not in (yc_url or "")
+    url = yc_url if not guessed else \
         f"https://www.ycombinator.com/companies/{re.sub(r'[^a-z0-9]+', '-', company_name.lower()).strip('-')}"
     r = _get(url)
     if r is None:
@@ -144,14 +149,24 @@ def yc_founders(company_name: str, yc_url: str = "") -> list[dict]:
     people: dict[str, dict] = {}
     # Inertia-style pages embed props as JSON in data-page; take founders from there when present
     m = re.search(r'data-page="([^"]+)"', page)
+    props = None
     if m:
         try:
-            for f in _find_key(json.loads(html_lib.unescape(m.group(1))), "founders") or []:
+            props = json.loads(html_lib.unescape(m.group(1)))
+        except ValueError:
+            props = None
+    if guessed:
+        site = _find_text(props, "website") if props is not None else None
+        if not domain or not site or normalize_domain(site) != domain:
+            return []
+    if props is not None:
+        try:
+            for f in _find_key(props, "founders") or []:
                 name = f.get("full_name") or f.get("name")
                 if name:
                     people[name] = {"name": name, "title": f.get("title") or "Founder", "source": "yc",
                                     "linkedin": f.get("linkedin_url") or "", "x": f.get("twitter_url") or ""}
-        except (ValueError, AttributeError):
+        except (ValueError, AttributeError, TypeError):
             pass
     if not people:  # fallback: founder profile links like /founders/360041-zeno-rocha
         for slug in dict.fromkeys(YC_FOUNDER_RE.findall(page)):
@@ -159,6 +174,23 @@ def yc_founders(company_name: str, yc_url: str = "") -> list[dict]:
             people[name] = {"name": name, "title": "Founder", "source": "yc",
                             "profile_url": f"https://www.ycombinator.com/founders/{slug}"}
     return list(people.values())[:4]
+
+
+def _find_text(obj, key):
+    """First string value stored under `key`, anywhere in nested JSON (`_find_key` only finds lists)."""
+    if isinstance(obj, dict):
+        if isinstance(obj.get(key), str) and obj[key]:
+            return obj[key]
+        for v in obj.values():
+            found = _find_text(v, key)
+            if found:
+                return found
+    elif isinstance(obj, list):
+        for v in obj:
+            found = _find_text(v, key)
+            if found:
+                return found
+    return None
 
 
 def _find_key(obj, key):
@@ -316,7 +348,7 @@ def enrich(name: str, domain: str | None, known_founders: list[dict] | None = No
     for f in (known_founders or []):
         if f.get("name"):
             founders.setdefault(f["name"], {"title": "Founder", "source": "news", **f})
-    for f in yc_founders(name, yc_url):
+    for f in yc_founders(name, yc_url, domain):
         founders.setdefault(f["name"], f).update({k: v for k, v in f.items() if v and k not in founders[f["name"]]})
     site = crawl_site(domain)
     if not founders:

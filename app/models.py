@@ -40,6 +40,10 @@ class User(Base):
     email_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     verification_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # Bumped to sign out every existing session (e.g. when Google takes over an unconfirmed account)
+    session_epoch: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Last time they used the app (web or WhatsApp); daily matching skips people who went quiet
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # AI drafts used today (cost cap); day is an ISO date string
     drafts_day: Mapped[str | None] = mapped_column(String(10), nullable=True)
     drafts_used: Mapped[int | None] = mapped_column(Integer, nullable=True)

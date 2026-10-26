@@ -32,8 +32,15 @@ Startups:
 Return a JSON array: [{{"id": int, "score": int, "reason": str}}]"""
 
 
+# Two-letter words that are just English; everything else of 2+ characters is kept, so short
+# skills ("ai", "ml", "go", "ui", "ux", "qa", "c#", "c++") count.
+_STOP = {"an", "as", "at", "be", "by", "do", "for", "if", "in", "is", "it", "me", "my", "no", "of", "on", "or",
+         "so", "to", "up", "us", "we", "and", "the", "with", "who", "you", "are", "our", "can", "has", "its", "not"}
+
+
 def _tokens(text: str) -> set[str]:
-    return {t for t in re.findall(r"[a-z][a-z0-9+#.]{1,}", text.lower()) if len(t) > 2}
+    words = (w.rstrip(".") for w in re.findall(r"[a-z0-9][a-z0-9+#.]*", text.lower()))
+    return {w for w in words if len(w) >= 2 and w not in _STOP}
 
 
 def _prefilter(user: User, candidates: list[Startup], keep: int = 40) -> list[Startup]:

@@ -19,7 +19,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app import agent, pages, scheduler
-from app.auth import create_token, current_user, decode_token, hash_password, verify_password
+from app.auth import create_token, current_user, decode_payload, decode_token, hash_password, session_token, verify_password
 from app.config import get_settings
 from app.db import SessionLocal, get_db, init_db
 from app.models import ChatMessage, Match, Startup, User
@@ -90,7 +90,7 @@ async def security_headers(request: Request, call_next):
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 
-@app.get("/", include_in_schema=False)
+@app.api_route("/", include_in_schema=False, methods=["GET", "HEAD"])
 def index():
     return FileResponse(STATIC / "index.html")
 
@@ -98,8 +98,8 @@ def index():
 # ---------- auth ----------
 class SignupIn(BaseModel):
     email: EmailStr
-    password: str = Field(min_length=8)
-    name: str = ""
+    password: str = Field(min_length=8, max_length=200)
+    name: str = Field("", max_length=100)
 
 
 class LoginIn(BaseModel):
@@ -108,7 +108,11 @@ class LoginIn(BaseModel):
 
 
 @app.post("/api/auth/signup")
-def signup(body: SignupIn, background: BackgroundTasks, db: Session = Depends(get_db)):
+def signup(body: SignupIn, request: Request, background: BackgroundTasks, db: Session = Depends(get_db)):
+    if not email_signup_open():
+        raise HTTPException(503, "Email sign-up opens soon. For now, continue with Google.")
+    if _too_many_signups(client_ip(request)):  # also stops using us to send confirmation emails to strangers
+        raise HTTPException(429, "Too many new accounts from this network. Try again in an hour.")
     email = body.email.lower()
     if db.scalar(select(User).where(User.email == email)):
         raise HTTPException(409, "An account with that email already exists")
@@ -117,9 +121,10 @@ def signup(body: SignupIn, background: BackgroundTasks, db: Session = Depends(ge
     user = User(email=email, name=body.name.strip(), password_hash=hash_password(body.password))
     db.add(user)
     db.commit()
+    _count_signup(client_ip(request))
     _welcome(db, user)
     _send_confirmation(db, user, background)
-    return {"token": create_token(user.id)}
+    return {"token": session_token(user)}
 
 
 # ---------- email confirmation ----------
@@ -154,6 +159,8 @@ def verify_email(token: str = "", db: Session = Depends(get_db)):
 def resend_verification(background: BackgroundTasks, user: User = Depends(current_user), db: Session = Depends(get_db)):
     if user.email_verified_at:
         return {"ok": True, "already": True}
+    if not mailer.is_configured() and get_settings().llm_provider != "fake":
+        raise HTTPException(503, "Confirmation emails aren't available yet. Sign in with Google using this email to unlock.")
     last = user.verification_sent_at
     if last and last.tzinfo is None:
         last = last.replace(tzinfo=timezone.utc)
@@ -173,9 +180,40 @@ def _welcome(db: Session, user: User) -> None:
     db.commit()
 
 
-# Failed sign-ins per email and per IP: 5 per email / 20 per IP in 15 minutes, then wait.
+def client_ip(request: Request) -> str:
+    """The visitor's IP. Behind Render's proxy, the proxy appends the address it saw to
+    X-Forwarded-For; anything to the left of that was written by the visitor and can be faked.
+    TRUSTED_PROXY_HOPS = how many proxies append (1 on Render)."""
+    hops = get_settings().trusted_proxy_hops
+    forwarded = [p.strip() for p in request.headers.get("x-forwarded-for", "").split(",") if p.strip()]
+    if hops and len(forwarded) >= hops:
+        return forwarded[-hops]
+    return request.client.host if request.client else "?"
+
+
+_SIGNUPS: dict[str, list[float]] = {}
+
+
+def _too_many_signups(ip: str, per_hour: int = 5) -> bool:
+    """Accounts created from this IP in the last hour (failed attempts, like a typo, don't count)."""
+    import time
+    now_ts = time.monotonic()
+    recent = [t for t in _SIGNUPS.get(ip, []) if now_ts - t < 3600]
+    _SIGNUPS[ip] = recent
+    return len(recent) >= per_hour
+
+
+def _count_signup(ip: str) -> None:
+    import time
+    if len(_SIGNUPS) > 20000:  # keep memory bounded
+        _SIGNUPS.clear()
+    _SIGNUPS.setdefault(ip, []).append(time.monotonic())
+
+
+# Failed sign-ins in 15 minutes: 5 per email from one IP (so a stranger can't lock you out
+# from your own network), 50 per email overall (guessing spread across many IPs), 20 per IP.
 _FAILS: dict[str, list[float]] = {}
-_FAIL_WINDOW, _MAX_PER_EMAIL, _MAX_PER_IP = 15 * 60, 5, 20
+_FAIL_WINDOW, _MAX_PER_EMAIL_IP, _MAX_PER_EMAIL, _MAX_PER_IP = 15 * 60, 5, 50, 20
 
 
 def _recent_fails(key: str) -> list[float]:
@@ -192,7 +230,7 @@ def _recent_fails(key: str) -> list[float]:
 def _login_blocked(email: str, ip: str) -> int:
     """Seconds to wait, or 0 if this sign-in may be attempted."""
     import time
-    for key, limit in ((f"e:{email}", _MAX_PER_EMAIL), (f"i:{ip}", _MAX_PER_IP)):
+    for key, limit in ((f"ei:{email}|{ip}", _MAX_PER_EMAIL_IP), (f"e:{email}", _MAX_PER_EMAIL), (f"i:{ip}", _MAX_PER_IP)):
         fails = _recent_fails(key)
         if len(fails) >= limit:
             return int(fails[0] + _FAIL_WINDOW - time.monotonic()) + 1
@@ -203,40 +241,49 @@ def _record_fail(email: str, ip: str) -> None:
     import time
     if len(_FAILS) > 20000:  # keep memory bounded
         _FAILS.clear()
-    for key in (f"e:{email}", f"i:{ip}"):
+    for key in (f"ei:{email}|{ip}", f"e:{email}", f"i:{ip}"):
         _FAILS.setdefault(key, []).append(time.monotonic())
 
 
 @app.post("/api/auth/login")
 def login(body: LoginIn, request: Request, db: Session = Depends(get_db)):
-    email, ip = body.email.lower(), (request.client.host if request.client else "?")
+    email, ip = body.email.lower(), client_ip(request)
     if wait := _login_blocked(email, ip):
         raise HTTPException(429, f"Too many sign-in attempts. Try again in {max(1, round(wait / 60))} minute(s).")
     user = db.scalar(select(User).where(User.email == email))
     if not user or not verify_password(body.password, user.password_hash):
         _record_fail(email, ip)
         raise HTTPException(401, "Wrong email or password")
-    _FAILS.pop(f"e:{email}", None)  # a correct password clears that account's count
-    return {"token": create_token(user.id)}
+    _FAILS.pop(f"ei:{email}|{ip}", None)  # a correct password clears this IP's count for the account
+    return {"token": session_token(user)}
 
 
 # ---------- Sign in with Google ----------
 _GOOGLE_STATE_COOKIE = "fr_google_state"
 
 
+def email_signup_open() -> bool:
+    """Email sign-up needs confirmation emails; without SMTP nobody could ever confirm.
+    The offline demo (fake AI) keeps it open for local testing."""
+    return mailer.is_configured() or get_settings().llm_provider == "fake"
+
+
 @app.get("/api/auth/providers")
 def auth_providers():
-    return {"google": google_login.is_configured(), "whatsapp": whatsapp.chat_link()}
+    return {"google": google_login.is_configured(), "whatsapp": whatsapp.chat_link(), "email_signup": email_signup_open()}
 
 
 @app.get("/api/auth/magic", include_in_schema=False)
-def magic_login(token: str = ""):
-    """One-time-ish sign-in link sent over WhatsApp (15 minutes); lands in the web app signed in."""
+def magic_login(token: str = "", db: Session = Depends(get_db)):
+    """Sign-in link sent over WhatsApp (15 minutes); lands in the web app signed in."""
     try:
-        user_id = decode_token(token, purpose="magic")
+        payload = decode_payload(token, purpose="magic")
     except HTTPException:
         return RedirectResponse("/?magic=expired")
-    return RedirectResponse(f"/#token={create_token(user_id)}")
+    user = db.get(User, int(payload["sub"]))
+    if user is None or payload.get("ep", 0) != (user.session_epoch or 0):
+        return RedirectResponse("/?magic=expired")
+    return RedirectResponse(f"/#token={session_token(user)}")
 
 
 @app.get("/api/auth/google", include_in_schema=False)
@@ -266,7 +313,7 @@ def google_callback(request: Request, code: str = "", state: str = "", error: st
             if created:
                 _welcome(db, user)
             # token goes in the #fragment so it never reaches server logs; app.js picks it up
-            resp = RedirectResponse(f"/#token={create_token(user.id)}")
+            resp = RedirectResponse(f"/#token={session_token(user)}")
         except google_login.GoogleLoginError as exc:
             logging.getLogger(__name__).warning("Google sign-in failed: %s", exc)
             resp = RedirectResponse("/?google=error")
@@ -279,7 +326,7 @@ def me(user: User = Depends(current_user), db: Session = Depends(get_db)):
     p = profile_svc.get_or_create_profile(db, user)
     return {"email": user.email, "name": user.name,
             "email_verified": bool(user.email_verified_at), "linkedin": (p.links or {}).get("linkedin"),
-            "is_admin": is_admin(user),
+            "is_admin": is_admin(user), "can_confirm": email_signup_open(),
             "profile": {"summary": p.summary, "skills": p.skills, "highlights": p.highlights,
                         "target_roles": p.target_roles, "preferences": p.preferences, "ready": p.is_ready()}}
 
@@ -301,10 +348,15 @@ class ChatIn(BaseModel):
 
 
 @app.get("/api/chat")
-def chat_history(user: User = Depends(current_user), db: Session = Depends(get_db)):
-    rows = db.scalars(select(ChatMessage).where(ChatMessage.user_id == user.id).order_by(ChatMessage.id)).all()
+def chat_history(after: int = 0, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """The last 100 messages, or with ?after=<id> only newer ones (what the 30-second poll asks for)."""
+    q = select(ChatMessage).where(ChatMessage.user_id == user.id)
+    if after:
+        rows = db.scalars(q.where(ChatMessage.id > after).order_by(ChatMessage.id).limit(100)).all()
+    else:
+        rows = list(reversed(db.scalars(q.order_by(ChatMessage.id.desc()).limit(100)).all()))
     return [{"id": r.id, "role": r.role, "content": r.content, "unread": r.unread, "at": r.created_at.isoformat(),
-             "cards": agent.rebuild_cards(db, user, r.cards)} for r in rows[-100:]]
+             "cards": agent.rebuild_cards(db, user, r.cards)} for r in rows]
 
 
 @app.post("/api/chat")
@@ -322,11 +374,16 @@ async def upload_resume(file: UploadFile = File(...), user: User = Depends(curre
         raise HTTPException(422, "Couldn't read much text from that file. Is it a scanned image? Try a text PDF.")
     db.add(ChatMessage(user_id=user.id, role="user", content=f"[attached: {file.filename}]"))
     db.commit()
-    p, kind = profile_svc.ingest_document(db, user, text)
-    msg = profile_svc.upload_reply(p, kind)
+    try:
+        p, kind = profile_svc.ingest_document(db, user, text)
+        msg = profile_svc.upload_reply(p, kind)
+    except Exception:  # AI unavailable: keep the conversation whole and say so
+        logging.getLogger(__name__).exception("resume reading failed for user %s", user.id)
+        db.rollback()
+        msg = "I couldn't read it right now because my AI side is unavailable. Please attach it again in a few minutes."
     db.add(ChatMessage(user_id=user.id, role="assistant", content=msg))
     db.commit()
-    return {"reply": msg, "profile": profile_svc.profile_brief(p)}
+    return {"reply": msg, "profile": profile_svc.profile_brief(user.profile)}
 
 
 # ---------- dashboard & direct actions (UI buttons; these skip the LLM) ----------
@@ -348,6 +405,11 @@ def _act(fn):
         return fn()
     except outreach.OutreachError as exc:
         raise HTTPException(400, str(exc)) from exc
+    except HTTPException:
+        raise
+    except Exception as exc:  # e.g. the AI is unavailable while drafting
+        logging.getLogger(__name__).exception("action failed")
+        raise HTTPException(503, "That didn't work right now. Please try again in a few minutes.") from exc
 
 
 @app.post("/api/matches/{match_id}/draft")
@@ -403,8 +465,10 @@ def api_stop(match_id: int, user: User = Depends(current_user), db: Session = De
 
 # ---------- admin ----------
 def is_admin(user: User) -> bool:
+    """Listed in ADMIN_EMAILS *and* proven to own that address (confirmed, or Google sign-in).
+    Otherwise anyone could sign up with the admin's email first and become admin."""
     admins = {e.strip().lower() for e in get_settings().admin_emails.split(",") if e.strip()}
-    return user.email.lower() in admins
+    return bool(user.email_verified_at) and user.email.lower() in admins
 
 
 @app.post("/api/admin/discover")
@@ -470,6 +534,12 @@ def _rate_limited(ip: str, per_minute: int = 30) -> bool:
     return len(hits) > per_minute
 
 
+@app.get("/api/public/ip")
+def public_ip(request: Request):
+    """The address rate limits see for you (checks the proxy setup; it's only your own IP)."""
+    return {"ip": client_ip(request)}
+
+
 @app.get("/api/public/stats")
 def public_stats(db: Session = Depends(get_db)):
     return matching.public_stats(db)
@@ -482,32 +552,32 @@ def public_fresh(db: Session = Depends(get_db)):
 
 @app.get("/api/public/preview")
 def public_preview(request: Request, q: str = "", db: Session = Depends(get_db)):
-    if _rate_limited(request.client.host if request.client else "?"):
+    if _rate_limited(client_ip(request)):
         raise HTTPException(429, "Slow down a little and try again in a minute.")
     return matching.public_preview(db, q[:200])
 
 
 # ---------- policy pages ----------
-@app.get("/terms", include_in_schema=False, response_class=HTMLResponse)
+@app.api_route("/terms", include_in_schema=False, response_class=HTMLResponse, methods=["GET", "HEAD"])
 def terms_page():
     return pages.terms()
 
 
-@app.get("/privacy", include_in_schema=False, response_class=HTMLResponse)
+@app.api_route("/privacy", include_in_schema=False, response_class=HTMLResponse, methods=["GET", "HEAD"])
 def privacy_page():
     return pages.privacy()
 
 
-@app.get("/refunds", include_in_schema=False, response_class=HTMLResponse)
+@app.api_route("/refunds", include_in_schema=False, response_class=HTMLResponse, methods=["GET", "HEAD"])
 def refunds_page():
     return pages.refunds()
 
 
-@app.get("/contact", include_in_schema=False, response_class=HTMLResponse)
+@app.api_route("/contact", include_in_schema=False, response_class=HTMLResponse, methods=["GET", "HEAD"])
 def contact_page():
     return pages.contact()
 
 
-@app.get("/healthz", include_in_schema=False)
+@app.api_route("/healthz", include_in_schema=False, methods=["GET", "HEAD"])
 def health():
     return HTMLResponse("ok")

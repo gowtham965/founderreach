@@ -35,8 +35,21 @@ def test_only_admins_can_refresh_the_pool(client, monkeypatch):
     assert client.post("/api/admin/discover", headers=h).status_code == 403
     assert client.get("/api/me", headers=h).json()["is_admin"] is False
     monkeypatch.setattr(get_settings(), "admin_emails", "boss@example.com, User1@Example.com")
+    # listed, but nobody has proved they own that address yet: not admin
+    assert client.post("/api/admin/discover", headers=h).status_code == 403
+    confirm(h)
     assert client.post("/api/admin/discover", headers=h).status_code == 200
     assert client.get("/api/me", headers=h).json()["is_admin"] is True
+
+
+def confirm(headers):
+    from app.auth import decode_token
+    from app.db import SessionLocal
+    from app.models import User
+    from datetime import datetime, timezone
+    with SessionLocal() as db:
+        db.get(User, decode_token(headers["Authorization"].split()[1])).email_verified_at = datetime.now(timezone.utc)
+        db.commit()
 
 
 def test_five_wrong_passwords_lock_that_email(client):

@@ -44,9 +44,9 @@ def chat_link(text: str = "Hi FounderReach") -> str | None:
 def signature_ok(body: bytes, header: str | None) -> bool:
     """Meta signs every webhook with the app secret (X-Hub-Signature-256: sha256=<hex>)."""
     secret = get_settings().whatsapp_app_secret
-    if not secret:
-        log.warning("WHATSAPP_APP_SECRET not set: webhook signatures are not being checked")
-        return True
+    if not secret:  # without it anyone could post fake messages "from" any number
+        log.error("WHATSAPP_APP_SECRET is not set: refusing WhatsApp webhooks until it is")
+        return False
     expected = "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
     return bool(header) and hmac.compare_digest(expected, header)
 
@@ -141,7 +141,10 @@ def pending_notices(db: Session, user: User) -> list[str]:
     for r in rows:
         r.unread = False
     db.commit()
-    return [r.content for r in rows]
+    latest = [r.content for r in rows[-5:]]  # the newest few; the rest are in the dashboard
+    if len(rows) > 5:
+        latest.insert(0, f"(+{len(rows) - 5} older updates: type *dashboard* to see everything)")
+    return latest
 
 
 # ---------- turning agent cards into chat text ----------

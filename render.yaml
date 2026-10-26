@@ -8,7 +8,7 @@ services:
     plan: starter            # paid plans keep running; free ones sleep, which stops the daily jobs
     region: singapore        # closest to Bengaluru
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*"
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --no-proxy-headers  # client IP: app.main.client_ip
     healthCheckPath: /healthz
     disk:
       name: data

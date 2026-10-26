@@ -10,7 +10,11 @@ import pytest  # noqa: E402
 from app.config import get_settings  # noqa: E402
 from app.services import contacts as c  # noqa: E402
 
-YC_PAGE = '<a href="/founders/360041-asha-rao">Asha Rao</a><a href="/founders/7158-dev-kumar">Dev</a>'
+def yc_page(website: str, founders=("Asha Rao", "Dev Kumar")) -> str:
+    """A YC company page as the site serves it: props as JSON in data-page, including the website."""
+    import html
+    props = {"props": {"company": {"website": website, "founders": [{"full_name": n, "title": "Founder"} for n in founders]}}}
+    return f'<div data-page="{html.escape(json.dumps(props))}"></div>'
 HOME = ('<footer>Questions? <a href="mailto:hello@vectorloop.ai">hello@vectorloop.ai</a> '
         '<a href="https://github.com/vectorloop">GitHub</a> <a href="https://jobs.ashbyhq.com/vectorloop">Careers</a></footer>')
 REPOS = [{"full_name": "vectorloop/sdk", "fork": False}, {"full_name": "vectorloop/fork", "fork": True}]
@@ -49,7 +53,7 @@ def net(monkeypatch):
 
 def test_full_waterfall_prefers_published_github_email(net):
     calls = net({
-        "https://www.ycombinator.com/companies/vectorloop": YC_PAGE,
+        "https://www.ycombinator.com/companies/vectorloop": yc_page("https://vectorloop.ai"),
         "https://vectorloop.ai/": HOME,
         "https://api.github.com/orgs/vectorloop/repos": REPOS,
         "https://api.github.com/repos/vectorloop/sdk/commits": COMMITS,
@@ -68,7 +72,7 @@ def test_full_waterfall_prefers_published_github_email(net):
 
 
 def test_pattern_guess_without_keys(net):
-    net({"https://www.ycombinator.com/companies/ledgerly": YC_PAGE})
+    net({"https://www.ycombinator.com/companies/ledgerly": yc_page("https://www.ledgerly.io/")})
     r = c.enrich("Ledgerly", "ledgerly.io")
     assert r["contacts"][0]["email"] == "asha@ledgerly.io" and r["contacts"][0]["confidence"] == "guess"
     assert r["contacts"][-1]["email"] == "founders@ledgerly.io"
@@ -79,7 +83,7 @@ def test_verifier_walks_patterns_until_valid(net, monkeypatch):
     statuses = {"asha@ledgerly.io": "invalid", "asha.rao@ledgerly.io": "valid"}
 
     def handler_routes():
-        return {"https://www.ycombinator.com/companies/ledgerly": YC_PAGE}
+        return {"https://www.ycombinator.com/companies/ledgerly": yc_page("https://www.ledgerly.io/")}
 
     calls = net(handler_routes())
     monkeypatch.setattr(c, "hunter_find", lambda *a: None)
@@ -91,7 +95,7 @@ def test_verifier_walks_patterns_until_valid(net, monkeypatch):
 
 def test_accept_all_domain_is_marked_likely(net, monkeypatch):
     monkeypatch.setattr(get_settings(), "hunter_api_key", "k")
-    net({"https://www.ycombinator.com/companies/ledgerly": YC_PAGE})
+    net({"https://www.ycombinator.com/companies/ledgerly": yc_page("https://www.ledgerly.io/")})
     monkeypatch.setattr(c, "hunter_find", lambda *a: None)
     monkeypatch.setattr(c, "verify", lambda e: "accept_all")
     assert c.enrich("Ledgerly", "ledgerly.io")["contacts"][0]["confidence"] == "likely"
@@ -100,7 +104,7 @@ def test_accept_all_domain_is_marked_likely(net, monkeypatch):
 def test_hunter_finder_used_once_before_patterns(net, monkeypatch):
     monkeypatch.setattr(get_settings(), "hunter_api_key", "k")
     net({
-        "https://www.ycombinator.com/companies/ledgerly": YC_PAGE,
+        "https://www.ycombinator.com/companies/ledgerly": yc_page("https://www.ledgerly.io/"),
         "https://api.hunter.io/v2/email-finder": {"data": {"email": "asha@ledgerly.io", "verification": {"status": "valid"}}},
     })
     called = []
@@ -126,12 +130,26 @@ def test_lever_and_greenhouse_boards(net):
 
 
 def test_yc_data_page_json(net):
-    page = {"props": {"company": {"founders": [{"full_name": "Zeno Rocha", "title": "CEO",
-                                                 "linkedin_url": "https://linkedin.com/in/zeno"}]}}}
+    page = {"props": {"company": {"website": "https://resend.com", "founders": [
+        {"full_name": "Zeno Rocha", "title": "CEO", "linkedin_url": "https://linkedin.com/in/zeno"}]}}}
     import html
     net({"https://www.ycombinator.com/companies/resend": f'<div data-page="{html.escape(json.dumps(page))}"></div>'})
-    f = c.yc_founders("Resend")[0]
+    f = c.yc_founders("Resend", domain="resend.com")[0]
     assert f["name"] == "Zeno Rocha" and f["linkedin"] == "https://linkedin.com/in/zeno"
+
+
+def test_same_named_yc_company_is_not_trusted(net):
+    """A YC page guessed from the name belongs to someone else: their founders must not be used."""
+    net({"https://www.ycombinator.com/companies/infinity": yc_page("https://infinity-other.com", ["Wrong Person"])})
+    assert c.yc_founders("Infinity", domain="infinity.in") == []
+    assert c.yc_founders("Infinity") == []  # no domain to check against: don't trust a guessed page
+    r = c.enrich("Infinity", "infinity.in")
+    assert all(f["name"] != "Wrong Person" for f in r["founders"])
+
+
+def test_known_yc_link_is_trusted(net):
+    net({"https://www.ycombinator.com/companies/infinity-2": yc_page("https://infinity.in", ["Real Founder"])})
+    assert c.yc_founders("Infinity", "https://www.ycombinator.com/companies/infinity-2")[0]["name"] == "Real Founder"
 
 
 def test_email_matches_name():

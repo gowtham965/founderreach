@@ -232,6 +232,10 @@ def upsert_startups(db: Session, rows: list[dict]) -> int:
         if existing is None:
             existing = db.scalar(select(Startup).where(Startup.name == name))
         fields = {k: row.get(k) for k in ("one_liner", "stage", "location", "tags", "signal", "source", "source_url") if row.get(k)}
+        if existing is not None and existing.source == "startup_map" and fields.get("source") != "startup_map":
+            # Keep the Bangalore Startup Map credit (a condition of using it); other facts still update.
+            fields.pop("source", None)
+            fields.pop("source_url", None)
         if existing:
             for k, v in fields.items():
                 setattr(existing, k, v)

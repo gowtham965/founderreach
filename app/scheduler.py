@@ -6,6 +6,7 @@
 For multiple server instances, move these to a single worker process or a cron service.
 """
 import logging
+from datetime import datetime, timedelta, timezone
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from sqlalchemy import select
@@ -24,11 +25,22 @@ def job_discovery():
         log.info("discovery added %d startups", discovery.run_discovery(db))
 
 
+def wants_daily_matches(user: User, now: datetime | None = None) -> bool:
+    """Confirmed, has a profile, and used the app recently (web or WhatsApp). Matching costs AI
+    credits, and nobody reads the 40th morning message in a row."""
+    if not user.email_verified_at or not user.profile or not user.profile.is_ready():
+        return False
+    now = now or datetime.now(timezone.utc)
+    seen = [t.replace(tzinfo=timezone.utc) if t.tzinfo is None else t
+            for t in (user.last_seen_at, user.whatsapp_last_inbound_at, user.created_at) if t]
+    return bool(seen) and now - max(seen) <= timedelta(days=get_settings().match_active_days)
+
+
 def job_daily_matches():
     with SessionLocal() as db:
         for user in db.scalars(select(User)).all():
             try:
-                if not user.profile or not user.profile.is_ready():
+                if not wants_daily_matches(user):
                     continue
                 new = matching.find_matches(db, user)
                 if not new:

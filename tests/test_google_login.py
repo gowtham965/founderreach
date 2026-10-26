@@ -1,5 +1,6 @@
 """Sign in with Google. Only the network call to Google is faked."""
 import os
+from datetime import datetime, timezone
 import tempfile
 from urllib.parse import parse_qs, urlparse
 
@@ -80,15 +81,31 @@ def test_new_google_user_gets_account_and_welcome(client, monkeypatch):
         assert db.query(ChatMessage).filter_by(user_id=user.id).count() == 1
 
 
-def test_existing_password_account_is_linked_not_duplicated(client, monkeypatch):
+def test_confirmed_password_account_is_linked_and_keeps_password(client, monkeypatch):
     client.post("/api/auth/signup", json={"email": "both@example.com", "password": "password123", "name": "Both"})
+    with SessionLocal() as db:  # they proved they own the address
+        db.query(User).filter_by(email="both@example.com").one().email_verified_at = datetime.now(timezone.utc)
+        db.commit()
     fake_google(monkeypatch, sub="g-both", email="both@example.com")
     token_from(finish(client, start(client)))
     with SessionLocal() as db:
         users = db.query(User).filter_by(email="both@example.com").all()
         assert len(users) == 1 and users[0].google_sub == "g-both"
-    # password still works for that account
     assert client.post("/api/auth/login", json={"email": "both@example.com", "password": "password123"}).status_code == 200
+
+
+def test_google_takes_over_an_unconfirmed_account_from_whoever_registered_it(client, monkeypatch):
+    """Pre-account hijacking: an attacker registers the victim's email with their own password.
+    When the real owner signs in with Google, the attacker's password and sessions stop working."""
+    r = client.post("/api/auth/signup", json={"email": "squat@example.com", "password": "attacker123"})
+    attacker = {"Authorization": f"Bearer {r.json()['token']}"}
+    assert client.get("/api/me", headers=attacker).status_code == 200
+    fake_google(monkeypatch, sub="g-squat", email="squat@example.com")
+    owner = token_from(finish(client, start(client)))
+    assert client.get("/api/me", headers=attacker).status_code == 401  # signed out
+    assert client.post("/api/auth/login", json={"email": "squat@example.com", "password": "attacker123"}).status_code == 401
+    me = client.get("/api/me", headers={"Authorization": f"Bearer {owner}"}).json()
+    assert me["email"] == "squat@example.com" and me["email_verified"] is True
 
 
 def test_returning_google_user_found_by_google_id_even_if_email_changed(client, monkeypatch):

@@ -106,7 +106,10 @@ def upload_reply(p: Profile, kind: str) -> str:
 def document_text(data: bytes, filename: str = "", mime: str = "") -> str:
     """PDF → text; anything else is read as plain text."""
     if filename.lower().endswith(".pdf") or mime == "application/pdf":
-        return pdf_to_text(data)
+        try:
+            return pdf_to_text(data)
+        except Exception:  # empty, encrypted or broken PDFs: the caller says "couldn't read much text"
+            return ""
     return data.decode("utf-8", "ignore")
 
 

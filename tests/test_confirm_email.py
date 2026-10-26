@@ -14,7 +14,7 @@ import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 from app import main  # noqa: E402
-from app.auth import create_token, decode_token  # noqa: E402
+from app.auth import create_token, decode_token, session_token  # noqa: E402
 from app.db import SessionLocal  # noqa: E402
 from app.models import Startup, User  # noqa: E402
 from app.services import google_login, mailer  # noqa: E402
@@ -124,7 +124,10 @@ def test_google_users_are_confirmed(client, outbox):
         user, created = google_login.sign_in(db, {"sub": "g-confirm-2", "email": "link-later@example.com",
                                                   "email_verified": True})
         assert not created and user.email_verified_at  # Google proved they own the address
-    assert me(client, token)["email_verified"] is True
+        fresh = session_token(user)
+    # the unconfirmed account's old sessions are signed out; the Google session is confirmed
+    assert client.get("/api/me", headers={"Authorization": f"Bearer {token}"}).status_code == 401
+    assert me(client, fresh)["email_verified"] is True
 
 
 def test_existing_accounts_count_as_confirmed(monkeypatch, tmp_path):

@@ -18,10 +18,15 @@ async function api(path, opts = {}) {
 
 /* ---------- auth ---------- */
 let mode = "signup";
+let emailSignupOpen = true;  // false while the server can't send confirmation emails
 function setMode(m) {
   mode = m;
   document.querySelectorAll(".seg button").forEach(b => b.setAttribute("aria-selected", b.dataset.mode === m));
-  $("#name-field").hidden = m !== "signup";
+  const closed = m === "signup" && !emailSignupOpen;
+  $("#name-field").hidden = m !== "signup" || closed;
+  document.querySelectorAll("#auth-form .field:not(#name-field)").forEach(f => f.hidden = closed);
+  $("#auth-submit").hidden = closed;
+  $("#signup-closed").hidden = !closed;
   $("#auth-submit").textContent = m === "signup" ? "Create account" : "Sign in";
   $("#auth-error").textContent = "";
 }
@@ -236,6 +241,8 @@ function showAuth() {
     $("#auth-form").scrollIntoView({ block: "center" });
   }
   api("/api/auth/providers").then(p => {
+    emailSignupOpen = p.email_signup !== false;
+    setMode(mode);
     // Shown either way; until Google keys are in .env, explain instead of hitting a 503 page.
     $(".btn.google").onclick = p.google ? null : e => {
       e.preventDefault();
@@ -304,9 +311,9 @@ async function loadChat() {
 async function poll() {
   if (!store.token || document.hidden) return;
   try {
-    const rows = await api("/api/chat");
-    const fresh = rows.filter(r => r.id > lastId);
-    if (fresh.length && !busy) { fresh.forEach(r => { addMsg(r.role, r.content, r.unread ? "unread" : ""); addCards(r.cards); }); lastId = rows[rows.length - 1].id; }
+    if (busy) return;
+    const fresh = await api(`/api/chat?after=${lastId}`);  // only what's new since the last look
+    if (fresh.length && !busy) { fresh.forEach(r => { addMsg(r.role, r.content, r.unread ? "unread" : ""); addCards(r.cards); }); lastId = fresh[fresh.length - 1].id; }
   } catch {}
 }
 let busy = false;
@@ -569,6 +576,7 @@ async function refreshMe() {
   $("#discover-btn").hidden = !me.is_admin;  // refreshing spends AI credits: admin only
   if (me.email_verified) banner(justVerified === "1" ? "Email confirmed ✓ Founder emails and drafts are unlocked." : "", "ok");
   else if (justVerified === "expired") banner("That confirmation link has expired. Send yourself a new one:", "warn", true);
+  else if (!me.can_confirm) banner(`To see founder emails and drafts, sign out and continue with Google using ${me.email}.`, "");
   else banner(`Confirm your email to see founder emails and drafts. We sent a link to ${me.email}.`, "", true);
   justVerified = null;
 }
