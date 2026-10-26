@@ -15,14 +15,14 @@ from fastapi import BackgroundTasks, Depends, FastAPI, File, HTTPException, Requ
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, EmailStr, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app import agent, scheduler
+from app import agent, pages, scheduler
 from app.auth import create_token, current_user, decode_token, hash_password, verify_password
 from app.config import get_settings
 from app.db import SessionLocal, get_db, init_db
-from app.models import ChatMessage, Match, User
+from app.models import ChatMessage, Match, Startup, User
 from app.services import discovery, email_check, google_login, mailer, matching, outreach, profile as profile_svc
 from app.services import wa_bot, whatsapp
 
@@ -37,8 +37,24 @@ async def lifespan(_: FastAPI):
         raise RuntimeError("Set SECRET_KEY in .env (run.sh generates one) before running with real users")
     init_db()
     scheduler.start()
+    if s.scheduler_enabled:
+        _fill_empty_pool()
     yield
     scheduler.stop()
+
+
+def _fill_empty_pool() -> None:
+    """A brand-new server has no startups until the 7am job; fetch them now, in the background."""
+    with SessionLocal() as db:
+        if db.scalar(select(func.count(Startup.id))):
+            return
+
+    def work():
+        with SessionLocal() as db:
+            logging.getLogger(__name__).info("startup pool empty: running discovery now (%d added)",
+                                             discovery.run_discovery(db))
+
+    threading.Thread(target=work, daemon=True).start()
 
 
 app = FastAPI(title=get_settings().app_name, lifespan=lifespan)
@@ -393,6 +409,27 @@ def public_preview(request: Request, q: str = "", db: Session = Depends(get_db))
     if _rate_limited(request.client.host if request.client else "?"):
         raise HTTPException(429, "Slow down a little and try again in a minute.")
     return matching.public_preview(db, q[:200])
+
+
+# ---------- policy pages ----------
+@app.get("/terms", include_in_schema=False, response_class=HTMLResponse)
+def terms_page():
+    return pages.terms()
+
+
+@app.get("/privacy", include_in_schema=False, response_class=HTMLResponse)
+def privacy_page():
+    return pages.privacy()
+
+
+@app.get("/refunds", include_in_schema=False, response_class=HTMLResponse)
+def refunds_page():
+    return pages.refunds()
+
+
+@app.get("/contact", include_in_schema=False, response_class=HTMLResponse)
+def contact_page():
+    return pages.contact()
 
 
 @app.get("/healthz", include_in_schema=False)

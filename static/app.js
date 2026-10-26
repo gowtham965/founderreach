@@ -533,6 +533,16 @@ $("#discover-btn").addEventListener("click", async e => {
   catch (err) { e.target.textContent = err.message; }
 });
 $("#logout-btn").addEventListener("click", () => { store.token = null; showAuth(); });
+$("#delete-btn").addEventListener("click", async e => {
+  const b = e.target;
+  if (b.dataset.armed !== "1") {  // two taps instead of a browser dialog
+    b.dataset.armed = "1"; b.textContent = "Tap again to delete everything"; setTimeout(() => { b.dataset.armed = ""; b.textContent = "Delete my account"; }, 5000);
+    return;
+  }
+  b.disabled = true;
+  try { await api("/api/me", { method: "DELETE" }); store.token = null; showAuth(); }
+  catch (err) { b.textContent = err.message; b.disabled = false; }
+});
 
 /* ---------- email confirmation banner ---------- */
 function banner(text, kind = "", resend = false) {

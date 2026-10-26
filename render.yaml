@@ -1,0 +1,46 @@
+# Render blueprint for founderreach.in (Render dashboard → New → Blueprint → pick this repo).
+# One web service. It must stay a single instance: the scheduler runs inside it.
+# SQLite lives on a small persistent disk, so data survives deploys and restarts.
+services:
+  - type: web
+    name: founderreach
+    runtime: python
+    plan: starter            # paid plans keep running; free ones sleep, which stops the daily jobs
+    region: singapore        # closest to Bengaluru
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*"
+    healthCheckPath: /healthz
+    disk:
+      name: data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: BASE_URL
+        value: https://founderreach.in
+      - key: DATABASE_URL
+        value: sqlite:////var/data/founderreach.db
+      - key: SECRET_KEY
+        generateValue: true  # Render makes a random one; never reuse your local key
+      - key: LLM_PROVIDER
+        value: anthropic
+      - key: BUSINESS_NAME
+        value: Gowtham R Gowda
+      - key: SUPPORT_EMAIL
+        sync: false
+      - key: BUSINESS_ADDRESS
+        sync: false
+      # Secrets: Render asks for these when the blueprint is created (sync: false = not stored in git)
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: HUNTER_API_KEY
+        sync: false

@@ -8,6 +8,10 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     app_name: str = "FounderReach"
+    # Shown on the Terms, Privacy, Refunds and Contact pages (payment gateways check these)
+    business_name: str = "Gowtham R Gowda"
+    support_email: str = ""
+    business_address: str = ""  # full postal address; payment gateways usually require it
     base_url: str = "http://localhost:8000"
     secret_key: str = "change-me-in-production"
     database_url: str = "sqlite:///./founderreach.db"

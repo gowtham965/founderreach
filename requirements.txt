@@ -12,5 +12,6 @@ feedparser>=6.0
 pypdf>=5.0
 apscheduler>=3.10,<4
 google-auth>=2.34
+requests>=2.31  # used by google-auth to verify Google sign-in tokens
 dnspython>=2.6
 pytest>=8.0
