@@ -209,26 +209,32 @@
   <div id="app" class="app" hidden>
     <div class="topwrap">
       <header class="top">
-        <span class="wordmark small">FounderReach</span>
+        <a class="logo" href="/?home" title="Home"><i></i>FounderReach</a>
         <nav class="tabs" role="tablist">
           <button role="tab" data-tab="chat" aria-selected="true">Chat</button>
           <button role="tab" data-tab="pipeline" aria-selected="false">Pipeline</button>
         </nav>
+        <span class="me" id="me-avatar" aria-hidden="true"></span>
       </header>
       <p class="banner" id="banner" role="status" hidden><span id="banner-text"></span> <button type="button" id="resend-btn" hidden>Resend</button></p>
     </div>
 
     <section id="chat" class="chat">
       <ol id="messages" class="messages" aria-live="polite"></ol>
-      <form id="composer" class="composer">
-        <label class="clip" title="Attach your resume or LinkedIn PDF">
-          <input type="file" id="resume" accept=".pdf,.txt,.md" hidden>
-          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M16.5 6.5v9.2a4.5 4.5 0 0 1-9 0V5.6a3 3 0 0 1 6 0v9.6a1.5 1.5 0 0 1-3 0V7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
-          <span class="sr">Attach resume or LinkedIn PDF</span>
-        </label>
-        <textarea id="input" rows="1" placeholder="Message FounderReach" aria-label="Message"></textarea>
-        <button class="btn primary send" id="send-btn">Send</button>
-      </form>
+      <div class="dock">
+        <div class="quick" id="quick" aria-label="Suggestions"></div>
+        <form id="composer" class="composer">
+          <label class="clip" title="Attach your resume or LinkedIn PDF">
+            <input type="file" id="resume" accept=".pdf,.txt,.md" hidden>
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M16.5 6.5v9.2a4.5 4.5 0 0 1-9 0V5.6a3 3 0 0 1 6 0v9.6a1.5 1.5 0 0 1-3 0V7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+            <span class="sr">Attach resume or LinkedIn PDF</span>
+          </label>
+          <textarea id="input" rows="1" placeholder="Ask for startups, a draft, a follow-up…" aria-label="Message"></textarea>
+          <button class="send" id="send-btn" aria-label="Send">
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M12 19V5M5.5 11.5 12 5l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </form>
+      </div>
     </section>
 
     <section id="pipeline" class="pipeline" hidden>
@@ -245,13 +251,15 @@
   <template id="letter-tpl">
     <article class="letter">
       <div class="letter-head">
-        <div>
+        <span class="mono" aria-hidden="true"></span>
+        <div class="head-text">
           <h3 class="co"></h3>
           <p class="what"></p>
+          <p class="tags"></p>
         </div>
         <span class="postmark"><b></b><small>fit</small></span>
       </div>
-      <p class="why"></p>
+      <p class="why"><b>Why you</b><span class="why-text"></span></p>
       <div class="envelope" hidden>
         <p class="to"><span class="to-addr"></span> <span class="conf"></span></p>
         <p class="alts"></p>

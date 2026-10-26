@@ -51,7 +51,8 @@ function goToForm(m) {
   form.classList.remove("flash"); void form.offsetWidth; form.classList.add("flash");
   setTimeout(() => form.querySelector(m === "signup" ? "[name=name]" : "[name=email]").focus({ preventScroll: true }), 500);
 }
-document.querySelectorAll("[data-goto]").forEach(b => b.addEventListener("click", () => goToForm(b.dataset.goto)));
+// Signed-in people who came back to the home page: every "get started" button opens their chat instead
+document.querySelectorAll("[data-goto]").forEach(b => b.addEventListener("click", () => store.token ? location.assign("/") : goToForm(b.dataset.goto)));
 const nav = $(".nav");
 addEventListener("scroll", () => nav.classList.toggle("scrolled", scrollY > 8), { passive: true });
 if ("IntersectionObserver" in window) {
@@ -287,7 +288,10 @@ function linkify(el, text) {
 function addMsg(role, text, extra = "") {
   const li = document.createElement("li");
   li.className = `msg ${role} ${extra}`.trim();
-  linkify(li, text);
+  if (extra === "typing") {  // three bouncing dots; the words are for screen readers
+    li.setAttribute("aria-label", text);
+    li.append(el("i"), el("i"), el("i"));
+  } else linkify(li, text);
   list.appendChild(li);
   list.scrollTop = list.scrollHeight;
   return li;
@@ -297,13 +301,44 @@ function addCards(cards) {
     const wrap = document.createElement("li");
     wrap.className = "cards";
     const items = c.type === "matches" ? c.items : [c.item];
+    if (c.type === "matches" && items.length > 1)
+      wrap.appendChild(el("p", "cards-head", `${items.length} Bengaluru startups that fit you`));
     items.forEach(it => wrap.appendChild(letter(it)));
     list.appendChild(wrap);
   }
   list.scrollTop = list.scrollHeight;
 }
+let myName = "";
+function hello() {  // the top of the chat: a namaskara, like the landing page
+  const li = el("li", "hello");
+  const k = el("span", "kn namaskara"); k.append(el("span", "flag", "ನಮಸ್ಕಾರ"));
+  li.append(k, el("h2", "", myName ? `Hi ${myName.split(" ")[0]}, let's find your next startup.` : "Let's find your next startup."),
+    el("p", "", "Seed-stage teams in Namma Bengaluru that just raised, and the founder's inbox for each."));
+  list.appendChild(li);
+}
+const QUICK = [
+  ["📎 Add resume", () => $("#resume").click(), p => !p?.ready],
+  ["Find startups for me", "Find startups that fit me"],
+  ["Only fintech", "Show me fintech startups"],
+  ["Draft to my top match", "Draft an email to my best match"],
+  ["What's due?", "Anything I should follow up on?"],
+];
+function quick(profile) {
+  const q = $("#quick"); q.textContent = "";
+  for (const [label, what, when] of QUICK) {
+    if (when && !when(profile)) continue;
+    const b = el("button", "qchip", label); b.type = "button";
+    b.addEventListener("click", () => {
+      if (typeof what === "function") return what();
+      if (busy) return;
+      input.value = what; $("#composer").requestSubmit();
+    });
+    q.appendChild(b);
+  }
+}
 async function loadChat() {
   list.textContent = "";
+  hello();
   const rows = await api("/api/chat");
   rows.forEach(r => { addMsg(r.role, r.content, r.unread ? "unread" : ""); addCards(r.cards); });
   lastId = rows.length ? rows[rows.length - 1].id : 0;
@@ -326,7 +361,7 @@ $("#composer").addEventListener("submit", async e => {
   if (!text || busy) return;
   input.value = ""; input.style.height = "auto";
   addMsg("user", text);
-  busy = true; $("#send-btn").disabled = true;
+  busy = true; $("#send-btn").disabled = true; $("#quick").classList.add("busy");
   const typing = addMsg("assistant", "thinking…", "typing");
   try {
     const { reply, cards } = await api("/api/chat", { method: "POST", json: { message: text } });
@@ -335,7 +370,7 @@ $("#composer").addEventListener("submit", async e => {
     addCards(cards);
     const rows = await api("/api/chat"); lastId = rows.length ? rows[rows.length - 1].id : lastId;
   } catch (err) { typing.textContent = err.message; typing.classList.remove("typing"); }
-  busy = false; $("#send-btn").disabled = false;
+  busy = false; $("#send-btn").disabled = false; $("#quick").classList.remove("busy");
 });
 $("#resume").addEventListener("change", async e => {
   const file = e.target.files[0]; if (!file) return;
@@ -345,6 +380,7 @@ $("#resume").addEventListener("change", async e => {
   try {
     const { reply } = await api("/api/resume", { method: "POST", body: fd });
     typing.remove(); addMsg("assistant", reply);
+    refreshMe().catch(() => {});  // the "Add resume" chip goes once the profile is ready
   } catch (err) { typing.textContent = err.message; typing.classList.remove("typing"); }
   e.target.value = "";
 });
@@ -365,16 +401,25 @@ function letter(m) {
     const co = $(".co", el); co.textContent = "";
     if (m.domain) { const a = document.createElement("a"); a.href = `https://${m.domain}`; a.target = "_blank"; a.rel = "noopener"; a.textContent = m.name; co.appendChild(a); }
     else co.textContent = m.name;
-    co.append(` #${m.match_id}`);
-    const what = $(".what", el);
-    what.textContent = [m.one_liner, m.stage, m.signal].filter(Boolean).join(". ");
+    const num = document.createElement("small"); num.textContent = `#${m.match_id}`; co.append(" ", num);
+    const mono = $(".mono", el); mono.textContent = (m.name || "?").trim()[0].toUpperCase();
+    mono.style.setProperty("--h", [...(m.name || "")].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7));
+    $(".what", el).textContent = m.one_liner || "";
+    const tags = $(".tags", el); tags.textContent = "";
+    const tag = (text, cls = "") => tags.append(Object.assign(document.createElement("span"), { className: `tag ${cls}`.trim(), textContent: text }));
+    if (m.stage) tag(m.stage.replace(/^./, c => c.toUpperCase()), "t-stage");
+    if (m.location) tag(`📍 ${m.location.replace(/,?\s*(Bengaluru|Bangalore)(,.*)?$/i, "") || "Bengaluru"}`);
+    const signal = (m.signal || "").replace(/^(pre-?seed|seed)( stage)?,?\s*/i, "");  // the stage is already a tag
+    if (signal) tag(signal.replace(/^./, c => c.toUpperCase()), "t-signal");
     if (m.source === "startup_map" && m.source_url) {  // credit the directory this came from
       const a = document.createElement("a"); a.href = m.source_url; a.target = "_blank"; a.rel = "noopener";
       a.className = "via"; a.textContent = "via Bangalore Startup Map";
-      what.append(" · ", a);
+      tags.append(a);
     }
     $(".postmark b", el).textContent = Math.round(m.score);
-    $(".why", el).textContent = m.reason;
+    $(".postmark", el).style.setProperty("--p", Math.round(m.score));
+    $(".why-text", el).textContent = m.reason || "";
+    $(".why", el).hidden = !m.reason;
     const o = m.outreach, env = $(".envelope", el), acts = $(".actions", el), state = $(".state", el);
     acts.textContent = ""; state.className = "state"; state.textContent = "";
     env.hidden = !o || !o.body;
@@ -573,6 +618,9 @@ let justVerified = null;  // "1" or "expired", from the confirmation link's redi
 /* ---------- account ---------- */
 async function refreshMe() {
   const me = await api("/api/me");
+  myName = me.name || "";
+  $("#me-avatar").textContent = (me.name || me.email || "?").trim()[0].toUpperCase();
+  quick(me.profile);
   $("#discover-btn").hidden = !me.is_admin;  // refreshing spends AI credits: admin only
   if (me.email_verified) banner(justVerified === "1" ? "Email confirmed ✓ Founder emails and drafts are unlocked." : "", "ok");
   else if (justVerified === "expired") banner("That confirmation link has expired. Send yourself a new one:", "warn", true);
@@ -584,6 +632,12 @@ async function refreshMe() {
 /* ---------- boot ---------- */
 async function boot() {
   if (!store.token) return showAuth();
+  if (new URLSearchParams(location.search).has("home")) {  // the logo in the app: show the home page, stay signed in
+    history.replaceState({}, "", "/#top");
+    document.body.classList.add("signed-in");
+    $(".nav-cta [data-goto=signup]").textContent = "Open my chat →";
+    return showAuth();
+  }
   $("#auth").hidden = true; $("#app").hidden = false;
   try { await refreshMe(); await loadChat(); } catch { return; }
 }
