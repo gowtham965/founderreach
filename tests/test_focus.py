@@ -128,3 +128,34 @@ def test_startup_map_can_be_switched_off(monkeypatch):
     monkeypatch.setattr(get_settings(), "startup_map_enabled", False)
     monkeypatch.setattr(discovery.httpx, "get", lambda *a, **k: pytest.fail("disabled source fetched"))
     assert discovery.fetch_startup_map() == []
+
+
+def test_article_facts_find_city_and_round():
+    from app.services.discovery import article_facts
+    t = ("Bengaluru-based dubdub, a trivia app, has raised $1.2 Mn in a seed round led by 3one4 Capital. "
+         "The startup earlier raised a pre-Series A from Mumbai-based investors.")
+    assert article_facts(t) == {"location": "Bengaluru, India", "stage": "seed"}
+    assert article_facts("Mumbai-based Kiko raised Rs 20 Cr in its Series A round.") == {"location": "Mumbai", "stage": "later"}
+    assert article_facts("The company, headquartered in Bangalore, closed a pre-seed round.") == {"location": "Bengaluru, India", "stage": "pre-seed"}
+    assert article_facts("Nothing useful here.") == {"location": None, "stage": None}
+
+
+def test_news_rows_missing_facts_are_filled_from_the_article(monkeypatch):
+    from app.services import discovery
+    pages = {"https://news/dubdub": "<nav><p>Delhi-based X</p></nav>"[:0] + "<p>Bengaluru-based <b>dubdub</b> raised a seed round.</p>",
+             "https://news/kiko": "<p>Mumbai-based Kiko raised in a seed round.</p>"}
+    fetched = []
+    monkeypatch.setattr(discovery, "_article_text", lambda url: (fetched.append(url), discovery.re.sub(r"<[^>]+>", " ", pages[url]))[1])
+    monkeypatch.setattr(discovery.get_settings(), "focus_cities", "bengaluru,bangalore")
+    monkeypatch.setattr(discovery.get_settings(), "focus_stages", "pre-seed,seed")
+    dub = discovery.fill_from_article({"name": "dubdub", "stage": "unknown", "location": None, "source_url": "https://news/dubdub"})
+    assert (dub["location"], dub["stage"]) == ("Bengaluru, India", "seed") and discovery.in_focus(dub["location"], dub["stage"])
+    kiko = discovery.fill_from_article({"name": "Kiko", "stage": "seed", "location": None, "source_url": "https://news/kiko"})
+    assert not discovery.in_focus(kiko["location"], kiko["stage"])
+    later = discovery.fill_from_article({"name": "Big", "stage": "series b", "location": None, "source_url": "https://news/big"})
+    assert later["location"] is None and "https://news/big" not in fetched  # no fetch for stories that can't qualify
+
+
+def test_article_facts_ignore_non_places():
+    from app.services.discovery import article_facts
+    assert article_facts("The UPI-based app from Pune-based Kite raised a seed round.")["location"] == "Pune"
