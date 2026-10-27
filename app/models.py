@@ -50,6 +50,7 @@ class User(Base):
     # Free trial (starts at the first paid action) and paid passes (see app/services/billing.py)
     trial_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     trial_drafts_used: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    trial_chats_used: Mapped[int | None] = mapped_column(Integer, nullable=True)
     pass_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     profile: Mapped["Profile"] = relationship(back_populates="user", uselist=False, cascade="all, delete-orphan")

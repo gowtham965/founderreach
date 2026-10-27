@@ -1,9 +1,9 @@
 """Free trial, passes, and PhonePe payments (Standard Checkout v2).
 
-Who can use the paid features (new matches, AI drafts, follow-up drafts, LinkedIn notes):
+Who can use the paid features (chat, new matches, AI drafts, follow-up drafts, LinkedIn notes):
   * everyone, while payments are off (no PhonePe keys set)
   * admins, always
-  * anyone on a trial: TRIAL_DAYS from their first paid action, up to TRIAL_DRAFTS drafts
+  * anyone on a trial: TRIAL_DAYS from their first paid action, up to TRIAL_DRAFTS drafts and TRIAL_CHATS messages
   * anyone with a pass (pass_until in the future)
 Everything already made stays visible either way.
 
@@ -33,9 +33,14 @@ log = logging.getLogger(__name__)
 
 # plan -> (price in paise, days, label)
 PLANS = {
-    "week": (19900, 7, "7-day pass"),
-    "month": (49900, 30, "30-day pass"),
+    "week": (29900, 7, "7-day pass"),
+    "month": (69900, 30, "30-day pass"),
 }
+
+
+def price_line() -> str:
+    """"₹299 for 7 days or ₹699 for 30 days": used in messages and the policy pages, so prices live only above."""
+    return " or ".join(f"₹{p // 100} for {d} days" for p, d, _ in PLANS.values())
 ORDER_ID_RE = re.compile(r"^FR\d+-[0-9a-f]{12}$")
 
 _HOSTS = {
@@ -77,7 +82,7 @@ def _start_trial(user: User, at: datetime) -> None:
 
 
 def _locked_message(user: User, why: str) -> str:
-    return (f"{why} Get a pass to keep going: ₹199 for 7 days or ₹499 for 30 days. "
+    return (f"{why} Get a pass to keep going: {price_line()}. "
             "Tap “Get a pass” at the top of the app. Everything you already have stays here.")
 
 
@@ -112,6 +117,20 @@ def use_draft(db: Session, user: User) -> None:
     db.commit()
 
 
+def use_chat(db: Session, user: User) -> None:
+    """Called once per chat message (web or WhatsApp). Chat is most of the AI bill, so trials get TRIAL_CHATS
+    messages, and after the trial chat needs a pass. Buttons on the cards (sent, replied, skip) stay free."""
+    at = now()
+    if not payments_on() or is_admin(user) or _pass_active(user, at):
+        return
+    require_access(db, user)
+    used = user.trial_chats_used or 0
+    if used >= get_settings().trial_chats:
+        raise PaywallError(_locked_message(user, f"You've used the {get_settings().trial_chats} free chat messages in your trial."))
+    user.trial_chats_used = used + 1
+    db.commit()
+
+
 def summary(user: User) -> dict:
     """What the app shows in the plan pill and the passes sheet."""
     at = now()
@@ -123,6 +142,7 @@ def summary(user: User) -> dict:
         "trial_days": s.trial_days,
         "trial_ends": end.isoformat() if end else None,
         "trial_drafts_left": max(s.trial_drafts - (user.trial_drafts_used or 0), 0),
+        "trial_chats_left": max(s.trial_chats - (user.trial_chats_used or 0), 0),
         "access": has_access(user, at),
         "plans": [{"id": k, "price": p // 100, "days": d, "label": label} for k, (p, d, label) in PLANS.items()],
     }

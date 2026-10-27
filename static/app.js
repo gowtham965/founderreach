@@ -366,9 +366,10 @@ $("#composer").addEventListener("submit", async e => {
   busy = true; $("#send-btn").disabled = true; $("#quick").classList.add("busy");
   const typing = addMsg("assistant", "thinking…", "typing");
   try {
-    const { reply, cards } = await api("/api/chat", { method: "POST", json: { message: text } });
+    const { reply, cards, paywall } = await api("/api/chat", { method: "POST", json: { message: text } });
     typing.remove();
     addMsg("assistant", reply);
+    if (paywall) openPlans(reply);
     addCards(cards);
     const rows = await api("/api/chat"); lastId = rows.length ? rows[rows.length - 1].id : lastId;
   } catch (err) { typing.textContent = err.message; typing.classList.remove("typing"); }

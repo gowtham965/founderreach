@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     phonepe_webhook_password: str = ""
     trial_days: int = 2
     trial_drafts: int = 5
+    trial_chats: int = 25  # chat messages in the trial: chat is most of the AI cost
     cf_analytics_token: str = ""  # Cloudflare Web Analytics site token; empty = no traffic stats
     business_address: str = ""  # full postal address; payment gateways usually require it
     # Emails allowed to run admin actions (e.g. refreshing the startup pool), comma separated

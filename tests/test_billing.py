@@ -139,7 +139,7 @@ def test_pay_then_return_turns_on_a_pass_once(client, phonepe):
     r = client.post("/api/pay", headers=h, json={"plan": "week"})
     assert r.status_code == 200 and r.json()["redirect_url"].startswith("https://mercury-uat.phonepe.com/")
     pay_call = next(c for c in phonepe.calls if c[1].endswith("/checkout/v2/pay"))
-    assert pay_call[2]["headers"]["Authorization"] == "O-Bearer tok" and pay_call[2]["json"]["amount"] == 19900
+    assert pay_call[2]["headers"]["Authorization"] == "O-Bearer tok" and pay_call[2]["json"]["amount"] == 29900
     with SessionLocal() as db:
         order = db.query(Payment).filter_by(user_id=uid).one().merchant_order_id
     redirect = pay_call[2]["json"]["paymentFlow"]["merchantUrls"]["redirectUrl"]
@@ -227,3 +227,21 @@ def test_morning_matches_start_the_trial(client, phonepe):
         db.commit()
     scheduler.job_daily_matches()
     assert user(uid).trial_started_at is not None
+
+
+def test_trial_chat_cap_answers_with_the_offer(client, phonepe, monkeypatch):
+    monkeypatch.setattr(get_settings(), "trial_chats", 2)
+    h, uid = signup(client, "chatty@gmail.com")
+    for _ in range(2):
+        r = client.post("/api/chat", headers=h, json={"message": "hello"}).json()
+        assert not r.get("paywall")
+    r = client.post("/api/chat", headers=h, json={"message": "hello again"}).json()
+    assert r["paywall"] is True and "2 free chat messages" in r["reply"] and "₹299 for 7 days or ₹699 for 30 days" in r["reply"]
+    roles = [m["role"] for m in client.get("/api/chat", headers=h).json()][-2:]
+    assert roles == ["user", "assistant"]  # the message and the offer are both in the history
+
+
+def test_prices_come_from_one_place():
+    from app import pages
+    assert billing.price_line() == "₹299 for 7 days or ₹699 for 30 days"
+    assert billing.price_line() in pages.terms() and billing.price_line() in pages.refunds()

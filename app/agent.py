@@ -219,6 +219,13 @@ def respond(db: Session, user: User, text: str, max_steps: int = 6, channel: str
     db.query(ChatMessage).filter(ChatMessage.user_id == user.id, ChatMessage.unread.is_(True)).update({"unread": False})
     db.commit()
 
+    try:
+        billing.use_chat(db, user)
+    except billing.PaywallError as exc:  # trial used up: answer with the offer instead of spending AI
+        db.add(ChatMessage(user_id=user.id, role="assistant", content=str(exc)))
+        db.commit()
+        return {"reply": str(exc), "cards": [], "paywall": True}
+
     profile_svc.get_or_create_profile(db, user)
     just_saved = ""
     if "linkedin.com/in/" in text.lower():  # a pasted profile link is saved directly, not left to the model

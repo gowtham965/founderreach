@@ -10,6 +10,7 @@ from html import escape
 from pathlib import Path
 
 from app.config import get_settings
+from app.services.billing import price_line
 
 _STATIC = Path(__file__).resolve().parent.parent / "static"
 
@@ -102,9 +103,9 @@ interview or job.</p>
 
 <h2>Free trial and passes</h2>
 <ul>
-  <li>New accounts get a 2-day free trial, including up to 5 email drafts. The 2 days start the first time you get matches or
+  <li>New accounts get a 2-day free trial, including up to 5 email drafts and 25 chat messages. The 2 days start the first time you get matches or
       a draft. After that, using FounderReach for new matches, drafts and
-      follow-up reminders needs a pass: ₹199 for 7 days or ₹499 for 30 days (prices include applicable taxes unless stated otherwise
+      follow-up reminders needs a pass: {price_line()} (prices include applicable taxes unless stated otherwise
       at checkout).</li>
   <li>Passes don't renew automatically. When a pass ends you keep access to what you already have.</li>
   <li>Payments are handled by our payment partner; we never see or store your card details. Refunds follow our
@@ -177,9 +178,9 @@ def refunds() -> str:
     return _page("Refund & Cancellation Policy", f"""
 <p>This policy covers payments to FounderReach, run by {w['name']}.</p>
 <ul>
-  <li><strong>Free trial:</strong> every new account gets 2 days free, including up to 5 email drafts, starting the first time you
+  <li><strong>Free trial:</strong> every new account gets 2 days free, including up to 5 email drafts and 25 chat messages, starting the first time you
       get matches or a draft. No payment details are needed for the trial.</li>
-  <li><strong>Passes:</strong> ₹199 for 7 days or ₹499 for 30 days. Passes are one-time payments and <strong>never renew
+  <li><strong>Passes:</strong> {price_line()}. Passes are one-time payments and <strong>never renew
       automatically</strong>, so there's nothing to cancel.</li>
   <li><strong>Refunds:</strong> if you haven't used a pass yet (no new matches or drafts since buying it), you can ask for a full refund
       within 24 hours of buying it. After that, or once it's been used, passes aren't refundable.</li>
