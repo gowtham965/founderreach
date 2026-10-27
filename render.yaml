@@ -23,8 +23,8 @@ services:
         value: sqlite:////var/data/founderreach.db
       - key: SECRET_KEY
         generateValue: true  # Render makes a random one; never reuse your local key
-      - key: LLM_PROVIDER
-        value: anthropic
+      - key: LLM_PROVIDER         # anthropic or openai; set in the dashboard so a blueprint sync never flips it
+        sync: false
       - key: TRUSTED_PROXY_HOPS   # Cloudflare + Render's load balancer each append to X-Forwarded-For
         value: "2"
       - key: BUSINESS_NAME
@@ -37,6 +37,8 @@ services:
         sync: false
       # Secrets: Render asks for these when the blueprint is created (sync: false = not stored in git)
       - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY       # only needed with LLM_PROVIDER=openai
         sync: false
       - key: GOOGLE_CLIENT_ID
         sync: false

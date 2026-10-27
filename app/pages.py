@@ -61,6 +61,7 @@ def _who() -> dict:
         "name": escape(s.business_name),
         "email": f'<a href="mailto:{escape(email)}">{escape(email)}</a>' if email else 'us through our <a href="/contact">Contact page</a>',
         "address": escape(s.business_address.strip()),
+        "ai": "OpenAI (ChatGPT models)" if s.llm_provider.lower() == "openai" else "Anthropic (Claude AI)",
     }
 
 
@@ -146,7 +147,7 @@ We don't sell your data.</p>
 
 <h2>Who processes it for us</h2>
 <ul>
-  <li><strong>Anthropic</strong> (Claude AI): reads your background and messages to write matches, drafts and replies.</li>
+  <li><strong>{w['ai']}</strong>: reads your background and messages to write matches, drafts and replies.</li>
   <li><strong>Our hosting provider</strong>, where the app and its database run.</li>
   <li><strong>Google</strong> (if you sign in with Google), <strong>Meta</strong> (if you use WhatsApp), and our email provider for
       account emails such as confirmation links.</li>

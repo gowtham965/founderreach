@@ -30,6 +30,9 @@ class ToolCall:
 class LLMResponse:
     text: str = ""
     tool_calls: list[ToolCall] = field(default_factory=list)
+    # Provider-specific items to send back verbatim in the next call of the same tool loop
+    # (OpenAI reasoning models need their reasoning items returned with tool results). JSON-safe.
+    raw: list[dict] = field(default_factory=list)
 
 
 @dataclass

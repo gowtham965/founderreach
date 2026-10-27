@@ -66,3 +66,12 @@ def test_analytics_beacon_only_with_a_token(monkeypatch):
         r = c.get(path)
         assert 'data-cf-beacon="{&quot;token&quot;: &quot;abc123&quot;}"' in r.text
         assert "https://static.cloudflareinsights.com" in r.headers["content-security-policy"]
+
+
+def test_privacy_names_the_ai_provider_in_use(monkeypatch):
+    from app import pages
+    from app.config import get_settings
+    monkeypatch.setattr(get_settings(), "llm_provider", "openai")
+    assert "OpenAI" in pages.privacy() and "Anthropic" not in pages.privacy()
+    monkeypatch.setattr(get_settings(), "llm_provider", "anthropic")
+    assert "Anthropic" in pages.privacy()

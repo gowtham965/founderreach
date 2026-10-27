@@ -14,6 +14,10 @@ def get_llm() -> LLM:
         from app.llm.anthropic_provider import AnthropicLLM
 
         return AnthropicLLM(s.anthropic_api_key, s.anthropic_model)
+    if provider == "openai":
+        from app.llm.openai_provider import OpenAILLM
+
+        return OpenAILLM(s.openai_api_key)
     if provider == "ollama":
         from app.llm.ollama_provider import OllamaLLM
 
@@ -22,4 +26,4 @@ def get_llm() -> LLM:
         from app.llm.fake_provider import FakeLLM
 
         return FakeLLM()
-    raise ValueError(f"Unknown LLM_PROVIDER {s.llm_provider!r} (use anthropic, ollama or fake)")
+    raise ValueError(f"Unknown LLM_PROVIDER {s.llm_provider!r} (use anthropic, openai, ollama or fake)")

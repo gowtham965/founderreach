@@ -242,7 +242,8 @@ def respond(db: Session, user: User, text: str, max_steps: int = 6, channel: str
             if not resp.tool_calls:
                 reply = resp.text.strip()
                 break
-            messages.append({"role": "assistant", "content": resp.text, "tool_calls": [tc.as_dict() for tc in resp.tool_calls]})
+            messages.append({"role": "assistant", "content": resp.text, "tool_calls": [tc.as_dict() for tc in resp.tool_calls],
+                             "raw": resp.raw})
             for tc in resp.tool_calls:
                 result = _run_tool(db, user, tc.name, tc.input or {}, text, cards)
                 messages.append({"role": "tool", "tool_call_id": tc.id, "name": tc.name, "content": json.dumps(result, default=str)})

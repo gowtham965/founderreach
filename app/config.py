@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     secret_key: str = "change-me-in-production"
     database_url: str = "sqlite:///./founderreach.db"
 
-    # LLM: "anthropic" | "ollama" | "fake" (tests / offline demo)
+    # LLM: "anthropic" | "openai" | "ollama" | "fake" (tests / offline demo)
     llm_provider: str = "anthropic"
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-sonnet-5-5"  # chat, drafts, follow-ups: the user reads these
@@ -46,6 +46,11 @@ class Settings(BaseSettings):
     effort_chat: str = "medium"
     effort_extract: str = "low"
     effort_draft: str = ""
+    # OpenAI (LLM_PROVIDER=openai): same split as Claude, chat on the main model, the rest on the small one
+    openai_api_key: str = ""
+    openai_model: str = "gpt-6.1-sol"
+    openai_model_fast: str = "gpt-6-luna"
+    openai_model_draft: str = "gpt-6-luna"
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "qwen2.5:14b"
 

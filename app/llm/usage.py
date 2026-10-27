@@ -13,6 +13,11 @@ RATES = {
     "claude-haiku-5-5": (0.10, 0.125, 0.01, 0.50),  # prompts up to 100K tokens
     "claude-opus-5-5": (4.00, 5.00, 0.20, 20.00),
     "claude-haiku-4-5": (1.00, 1.25, 0.10, 5.00),
+    # OpenAI, from https://developers.openai.com/api/docs/pricing (fetched 2026-10-27); no cache-write premium
+    "gpt-6.1-sol": (2.00, 2.00, 0.10, 10.00),
+    "gpt-6-luna": (0.10, 0.10, 0.01, 0.50),
+    "gpt-6.1-terra": (1.00, 1.00, 0.05, 5.00),
+    "gpt-6-astra": (10.00, 10.00, 1.00, 50.00),
 }
 
 
