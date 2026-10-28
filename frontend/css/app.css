@@ -28,6 +28,10 @@
 .hello .namaskara { font-size: 15px; padding: 3px 13px; }
 .hello h2 { margin: 0; font-size: clamp(1.45rem, 3.6vw, 1.95rem); font-weight: 800; letter-spacing: -.025em; line-height: 1.15; max-width: 22ch; }
 .hello p { margin: 0; color: var(--soft); max-width: 40ch; font-size: .97rem; }
+.clear-chat { margin-top: .2rem; border: 1px solid var(--line-strong); background: var(--card); color: var(--soft); border-radius: 999px;
+  padding: .3rem .85rem; font: 600 .8rem var(--font-ui); cursor: pointer; }
+.clear-chat:hover { color: var(--warn); border-color: var(--warn); }
+.clear-chat[data-armed="1"] { color: var(--warn); border-color: var(--warn); }
 
 .msg { max-width: min(78%, 560px); padding: .75rem 1.05rem; border-radius: 20px; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; position: relative; }
 .msg.assistant { background: var(--card); align-self: flex-start; margin-left: 42px; border-bottom-left-radius: 6px;

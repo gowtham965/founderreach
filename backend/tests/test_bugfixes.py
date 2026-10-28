@@ -207,3 +207,27 @@ def test_S_failed_signups_dont_use_up_the_limit(client):
     for _ in range(6):  # e.g. a typo'd address that the email check rejects
         assert client.post("/api/auth/signup", json={"email": "someone@gmial.com", "password": "password123"}).status_code == 400
     assert signup(client, "someone-real@gmail.com")[0].status_code == 200
+
+
+def test_clear_chat_keeps_matches_and_other_users(client):
+    from app.models import Match, Startup
+    _, h = signup(client, "clearme@gmail.com")
+    _, other = signup(client, "keepme@gmail.com")
+    client.post("/api/chat", headers=h, json={"message": "hello"})
+    client.post("/api/chat", headers=other, json={"message": "hi there"})
+    with SessionLocal() as db:
+        u = db.query(User).filter_by(email="clearme@gmail.com").one()
+        s = Startup(name="ClearCo", domain="clearco.in", stage="seed", location="Bengaluru")
+        db.add(s)
+        db.commit()
+        db.add(Match(user_id=u.id, startup_id=s.id, score=70, reason="fits"))
+        db.commit()
+    assert client.delete("/api/chat", headers=h).json()["cleared"] >= 3
+    assert client.get("/api/chat", headers=h).json() == []
+    assert len(client.get("/api/chat", headers=other).json()) >= 2  # someone else's chat is untouched
+    assert [m["name"] for m in client.get("/api/dashboard", headers=h).json()["matches"]] == ["ClearCo"]  # Pipeline keeps it
+    assert client.post("/api/chat", headers=h, json={"message": "hello again"}).status_code == 200  # and chat works after
+    with SessionLocal() as db:
+        db.query(Match).filter(Match.startup_id == s.id).delete()
+        db.query(Startup).filter_by(domain="clearco.in").delete()
+        db.commit()

@@ -27,6 +27,7 @@ def sent(monkeypatch):
     """Capture alerts instead of calling ntfy."""
     out = []
     monkeypatch.setattr(get_settings(), "ntfy_topic", "fr-test-topic")
+    monkeypatch.setattr(get_settings(), "base_url", "https://founderreach.in")  # alerts only go out from the live site
     monkeypatch.setattr(alerts, "_post", lambda title, message, tags, priority: out.append((title, message, tags)))
     monkeypatch.setattr(alerts.threading, "Thread", lambda target, args, daemon: type("T", (), {"start": lambda self: target(*args)})())
     return out
@@ -69,6 +70,7 @@ def test_signup_payment_and_failure_alert(client, sent):
 
 def test_alerts_never_break_a_signup(client, monkeypatch):
     monkeypatch.setattr(get_settings(), "ntfy_topic", "fr-test-topic")
+    monkeypatch.setattr(get_settings(), "base_url", "https://founderreach.in")
     monkeypatch.setattr(alerts.httpx, "post", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("ntfy down")))
     alerts.send("x", "y", wait=True)  # logs, doesn't raise
 
@@ -94,3 +96,14 @@ def test_admin_overview(client, monkeypatch, sent):
     assert [r["email"] for r in only] == ["plain-user@gmail.com"]
     assert client.post("/api/admin/test-alert", headers=boss).json() == {"ok": True}
     assert sent[-1][0] == "FounderReach test alert"
+
+
+def test_local_copies_never_send_alerts(monkeypatch):
+    """A dev or test server with the topic in its .env must not page the admin about its own test sign-ups."""
+    called = []
+    monkeypatch.setattr(get_settings(), "ntfy_topic", "fr-test-topic")
+    monkeypatch.setattr(alerts, "_post", lambda *a: called.append(a))
+    for local in ("http://localhost:8000", "http://127.0.0.1:8000", ""):
+        monkeypatch.setattr(get_settings(), "base_url", local)
+        assert alerts.send("New sign-up", "x", wait=True) is False
+    assert called == []

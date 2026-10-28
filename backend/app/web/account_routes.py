@@ -57,6 +57,14 @@ def chat_history(after: int = 0, user: User = Depends(current_user), db: Session
              "cards": agent.rebuild_cards(db, user, r.cards)} for r in rows]
 
 
+@router.delete("/api/chat")
+def clear_chat(user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Clear the conversation. Matches, drafts and follow-ups live outside the chat, so they all stay (Pipeline)."""
+    cleared = db.query(ChatMessage).filter(ChatMessage.user_id == user.id).delete()
+    db.commit()
+    return {"ok": True, "cleared": cleared}
+
+
 @router.post("/api/chat")
 def chat(body: ChatIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
     return agent.respond(db, user, body.message.strip())

@@ -31,8 +31,10 @@ def _post(title: str, message: str, tags: str, priority: str) -> None:
 
 
 def send(title: str, message: str, tags: str = "", priority: str = "default", wait: bool = False) -> bool:
-    """Fire one alert. Returns False when alerts aren't set up."""
-    if not get_settings().ntfy_topic:
+    """Fire one alert. Returns False when alerts aren't set up, or this isn't the live site: a local or test copy
+    with the topic in its .env must never page the admin about its own test sign-ups."""
+    s = get_settings()
+    if not s.ntfy_topic or not s.base_url.startswith("https://"):
         return False
     if wait:
         _post(title, message, tags, priority)

@@ -48,6 +48,19 @@ function hello() {  // the top of the chat: a namaskara, like the landing page
   const k = el("span", "kn namaskara"); k.append(el("span", "flag", "ನಮಸ್ಕಾರ"));
   li.append(k, el("h2", "", myName ? `Hi ${myName.split(" ")[0]}, let's find your next startup.` : "Let's find your next startup."),
     el("p", "", "Seed-stage teams in Namma Bengaluru that just raised, and the founder's inbox for each."));
+  const clear = el("button", "clear-chat", "Clear chat"); clear.type = "button";
+  clear.addEventListener("click", async () => {
+    if (clear.dataset.armed !== "1") {  // two taps instead of a browser dialog
+      clear.dataset.armed = "1";
+      clear.textContent = "Tap again to clear. Your matches and drafts stay in Pipeline.";
+      setTimeout(() => { clear.dataset.armed = ""; clear.textContent = "Clear chat"; }, 5000);
+      return;
+    }
+    clear.disabled = true;
+    try { await api("/api/chat", { method: "DELETE" }); await loadChat(); }
+    catch (err) { clear.textContent = err.message; clear.disabled = false; }
+  });
+  li.append(clear);
   list.appendChild(li);
 }
 const QUICK = [
@@ -74,6 +87,7 @@ export async function loadChat() {
   list.textContent = "";
   hello();
   const rows = await api("/api/chat");
+  list.querySelector(".clear-chat").hidden = !rows.length;  // nothing to clear yet
   rows.forEach(r => { addMsg(r.role, r.content, r.unread ? "unread" : ""); addCards(r.cards); });
   lastId = rows.length ? rows[rows.length - 1].id : 0;
 }
