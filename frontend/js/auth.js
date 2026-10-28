@@ -57,7 +57,9 @@ export function showAuth() {
   }).catch(() => {});
   const g = new URLSearchParams(location.search).get("google");
   if (g) {
-    $("#auth-error").textContent = g === "denied" ? "Google sign-in was cancelled." : "Google sign-in didn't work. Try again or use email.";
+    $("#auth-error").textContent = g === "denied" ? "Google sign-in was cancelled."
+      : g === "limit" ? "Too many new accounts from this network. Try again in an hour."
+      : "Google sign-in didn't work. Try again or use email.";
     history.replaceState({}, "", "/");
   }
 }

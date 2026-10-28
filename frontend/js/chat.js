@@ -127,8 +127,9 @@ $("#resume").addEventListener("change", async e => {
   const typing = addMsg("assistant", "reading your resume…", "typing");
   const fd = new FormData(); fd.append("file", file);
   try {
-    const { reply } = await api("/api/resume", { method: "POST", body: fd });
+    const { reply, paywall } = await api("/api/resume", { method: "POST", body: fd });
     typing.remove(); addMsg("assistant", reply);
+    if (paywall) openPlans(reply);
     refreshMe().catch(() => {});  // the "Add resume" chip goes once the profile is ready
   } catch (err) { typing.textContent = err.message; typing.classList.remove("typing"); }
   e.target.value = "";

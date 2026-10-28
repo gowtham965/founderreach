@@ -15,6 +15,7 @@ from app.config import get_settings
 from app.db import get_db
 from app.models import ChatMessage, User
 from app.services import alerts, discovery, email_check, google_login, mailer, whatsapp
+from app.services.billing import ledger
 from app.web.security import clear_fails, client_ip, count_signup, login_blocked, record_fail, too_many_signups
 
 router = APIRouter()
@@ -74,6 +75,7 @@ def signup(body: SignupIn, request: Request, background: BackgroundTasks, db: Se
     user = User(email=email, name=body.name.strip(), password_hash=hash_password(body.password))
     db.add(user)
     db.commit()
+    ledger.restore(db, user)  # same person as an earlier (deleted) account: the trial continues, it doesn't restart
     count_signup(client_ip(request))
     alerts.signup(user.email, "email")
     welcome(db, user)
@@ -165,8 +167,15 @@ def google_callback(request: Request, code: str = "", state: str = "", error: st
         try:
             if not (code and expected and hmac.compare_digest(state, expected)):
                 raise google_login.GoogleLoginError("state mismatch")
-            user, created = google_login.sign_in(db, google_login.fetch_identity(code))
+            identity = google_login.fetch_identity(code)
+            if not google_login.existing_user(db, identity) and too_many_signups(client_ip(request)):
+                resp = RedirectResponse("/?google=limit")  # new accounts only; existing ones always sign in
+                resp.delete_cookie(_GOOGLE_STATE_COOKIE, path="/api/auth/google")
+                return resp
+            user, created = google_login.sign_in(db, identity)
             if created:
+                ledger.restore(db, user)
+                count_signup(client_ip(request))
                 welcome(db, user)
             # token goes in the #fragment so it never reaches server logs; app.js picks it up
             resp = RedirectResponse(f"/#token={session_token(user)}")

@@ -55,6 +55,14 @@ def fetch_identity(code: str) -> dict:
         raise GoogleLoginError(f"Invalid Google ID token: {exc}") from exc
 
 
+def existing_user(db: Session, identity: dict) -> User | None:
+    """The account this Google identity already has (by Google id, or the same email), if any."""
+    sub, email = identity.get("sub"), (identity.get("email") or "").lower()
+    if sub and (user := db.scalar(select(User).where(User.google_sub == sub))):
+        return user
+    return db.scalar(select(User).where(User.email == email)) if email else None
+
+
 def sign_in(db: Session, identity: dict) -> tuple[User, bool]:
     """Find or create the user for a verified Google identity. Returns (user, created)."""
     sub, email = identity.get("sub"), (identity.get("email") or "").lower()

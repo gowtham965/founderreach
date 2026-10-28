@@ -19,6 +19,11 @@ ORDER_ID_RE = re.compile(r"^FR\d+-[0-9a-f]{12}$")
 class PaywallError(OutreachError):
     """The trial is over (or its drafts are used up) and there's no active pass."""
 
+    @staticmethod
+    def locked_reply(why: str) -> str:
+        return (f"{why} Get a pass to keep going: {price_line()}. "
+                "Tap “Get a pass” at the top of the app. Everything you already have stays here.")
+
 
 class PaymentError(Exception):
     pass

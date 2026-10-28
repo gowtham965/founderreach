@@ -166,7 +166,8 @@ LinkedIn. If you're a founder and want your details removed, write to {w['email'
 
 <h2>Keeping and deleting your data</h2>
 <p>We keep your data while your account exists. Delete your account from the Pipeline tab, or write to {w['email']}, and we remove your
-profile, uploaded documents, chats, matches and drafts.</p>
+profile, uploaded documents, chats, matches and drafts. To stop the free trial being restarted, we keep a one-way fingerprint of your
+email (not the address itself) with how much of the trial was used.</p>
 
 <h2>Security</h2>
 <p>Passwords are hashed, connections are encrypted, and access to the database is restricted. No system is perfectly secure, so please

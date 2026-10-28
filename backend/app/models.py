@@ -233,3 +233,15 @@ class Job(Base):
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     missed: Mapped[int] = mapped_column(Integer, default=0)  # checks in a row it was missing from a board that answered
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+
+
+class TrialUse(Base):
+    """The free trial per person, kept after account deletion so deleting and signing up again doesn't reset it.
+    Keyed by a one-way fingerprint of the normalised email (or WhatsApp number), never the address itself."""
+    __tablename__ = "trial_use"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    identity: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    trial_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    drafts_used: Mapped[int] = mapped_column(Integer, default=0)
+    chats_used: Mapped[int] = mapped_column(Integer, default=0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)

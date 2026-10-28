@@ -12,6 +12,7 @@ from app.db import get_db
 from app.llm import usage
 from app.models import ChatMessage, Match, Payment, User
 from app.services import billing, profile as profile_svc
+from app.services.billing import ledger
 from app.web.auth_routes import email_signup_open
 
 router = APIRouter()
@@ -35,6 +36,7 @@ def me(user: User = Depends(current_user), db: Session = Depends(get_db)):
 @router.delete("/api/me")
 def delete_account(user: User = Depends(current_user), db: Session = Depends(get_db)):
     """'Delete everything in one tap.'"""
+    ledger.remember(db, user)  # the trial outlives the account (a fingerprint, not the email): no fresh trial by re-signing up
     db.query(ChatMessage).filter(ChatMessage.user_id == user.id).delete()
     # payment records stay (refunds, accounts) but no longer point at the account
     db.query(Payment).filter(Payment.user_id == user.id).update({Payment.user_id: None})
@@ -80,6 +82,11 @@ async def upload_resume(file: UploadFile = File(...), user: User = Depends(curre
         raise HTTPException(422, "Couldn't read much text from that file. Is it a scanned image? Try a text PDF.")
     db.add(ChatMessage(user_id=user.id, role="user", content=f"[attached: {file.filename}]"))
     db.commit()
+    if not billing.has_access(user):  # reading it uses the AI; doesn't start the trial clock while it's open
+        msg = billing.PaywallError.locked_reply("Your free trial has ended, so I can't read new documents right now.")
+        db.add(ChatMessage(user_id=user.id, role="assistant", content=msg))
+        db.commit()
+        return {"reply": msg, "profile": profile_svc.profile_brief(user.profile), "paywall": True}
     try:
         p, kind = profile_svc.ingest_document(db, user, text)
         msg = profile_svc.upload_reply(p, kind)

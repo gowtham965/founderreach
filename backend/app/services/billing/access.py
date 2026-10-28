@@ -1,11 +1,13 @@
 """Who may use the paid features right now: payments off, admin, trial (days, drafts, chats) or a pass."""
 from datetime import datetime, timedelta
 
+from sqlalchemy import func, update
 from sqlalchemy.orm import Session
 
 from app.auth import is_admin
 from app.config import get_settings
 from app.models import User, aware, now
+from app.services.billing import ledger
 from app.services.billing.plans import PLANS, PaywallError, price_line
 
 
@@ -38,8 +40,7 @@ def _start_trial(user: User, at: datetime) -> None:
 
 
 def _locked_message(user: User, why: str) -> str:
-    return (f"{why} Get a pass to keep going: {price_line()}. "
-            "Tap “Get a pass” at the top of the app. Everything you already have stays here.")
+    return PaywallError.locked_reply(why)
 
 
 def has_access(user: User, at: datetime | None = None) -> bool:
@@ -55,9 +56,21 @@ def require_access(db: Session, user: User) -> None:
     at = now()
     if not has_access(user, at):
         raise PaywallError(_locked_message(user, "Your free trial has ended."))
-    if payments_on():
+    if payments_on() and not user.trial_started_at and not is_admin(user) and not _pass_active(user, at):
         _start_trial(user, at)
         db.commit()
+        ledger.remember(db, user)
+
+
+def _take_one(db: Session, user: User, column, cap: int) -> bool:
+    """Count one use in a single database step, so simultaneous requests can't all slip under the cap."""
+    taken = db.execute(update(User).where(User.id == user.id, func.coalesce(column, 0) < cap)
+                       .values({column: func.coalesce(column, 0) + 1})).rowcount
+    db.commit()
+    db.refresh(user)
+    if taken:
+        ledger.remember(db, user)
+    return bool(taken)
 
 
 def use_draft(db: Session, user: User) -> None:
@@ -66,11 +79,8 @@ def use_draft(db: Session, user: User) -> None:
     if not payments_on() or is_admin(user) or _pass_active(user, at):
         return
     require_access(db, user)
-    used = user.trial_drafts_used or 0
-    if used >= get_settings().trial_drafts:
+    if not _take_one(db, user, User.trial_drafts_used, get_settings().trial_drafts):
         raise PaywallError(_locked_message(user, f"You've used the {get_settings().trial_drafts} free drafts in your trial."))
-    user.trial_drafts_used = used + 1
-    db.commit()
 
 
 def use_chat(db: Session, user: User) -> None:
@@ -80,11 +90,8 @@ def use_chat(db: Session, user: User) -> None:
     if not payments_on() or is_admin(user) or _pass_active(user, at):
         return
     require_access(db, user)
-    used = user.trial_chats_used or 0
-    if used >= get_settings().trial_chats:
+    if not _take_one(db, user, User.trial_chats_used, get_settings().trial_chats):
         raise PaywallError(_locked_message(user, f"You've used the {get_settings().trial_chats} free chat messages in your trial."))
-    user.trial_chats_used = used + 1
-    db.commit()
 
 
 def summary(user: User) -> dict:
