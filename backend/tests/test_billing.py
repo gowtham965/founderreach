@@ -42,6 +42,7 @@ class FakePhonePe:
 @pytest.fixture
 def phonepe(monkeypatch):
     s = get_settings()
+    monkeypatch.setattr(s, "payment_provider", "phonepe")
     monkeypatch.setattr(s, "phonepe_client_id", "cid")
     monkeypatch.setattr(s, "phonepe_client_secret", "secret")
     monkeypatch.setattr(s, "phonepe_webhook_user", "hookuser")
@@ -84,7 +85,8 @@ def user(uid):
 
 
 def test_everything_open_while_payments_are_off(client, monkeypatch):
-    monkeypatch.setattr(get_settings(), "phonepe_client_id", "")
+    monkeypatch.setattr(get_settings(), "payment_provider", "razorpay")
+    monkeypatch.setattr(get_settings(), "razorpay_key_id", "")
     h, uid = signup(client, "free@gmail.com")
     b = client.get("/api/me", headers=h).json()["billing"]
     assert b["payments"] is False and b["access"] is True
@@ -206,7 +208,7 @@ def test_webhook_needs_phonepe_signature_and_checks_status_itself(client, phonep
 
 def test_webhook_refused_without_configured_credentials(monkeypatch):
     monkeypatch.setattr(get_settings(), "phonepe_webhook_user", "")
-    assert billing.webhook_ok(hashlib.sha256(b":").hexdigest()) is False
+    assert billing.phonepe_webhook_ok(hashlib.sha256(b":").hexdigest()) is False
 
 
 def test_deleting_account_keeps_payment_record(client, phonepe):
@@ -245,3 +247,106 @@ def test_prices_come_from_one_place():
     from app import pages
     assert billing.price_line() == "₹299 for 7 days or ₹699 for 30 days"
     assert billing.price_line() in pages.terms() and billing.price_line() in pages.refunds()
+
+
+# ---------------------------------------------------------------- Razorpay
+class FakeRazorpay:
+    def __init__(self):
+        self.status, self.paid, self.calls = "created", 0, []
+
+    def post(self, url, **kw):
+        self.calls.append(("POST", url, kw))
+        return httpx.Response(200, json={"id": "plink_TEST1", "short_url": "https://rzp.io/rzp/abc", "status": "created"})
+
+    def get(self, url, **kw):
+        self.calls.append(("GET", url, kw))
+        return httpx.Response(200, json={"id": "plink_TEST1", "status": self.status, "amount_paid": self.paid})
+
+
+@pytest.fixture
+def razorpay(monkeypatch):
+    s = get_settings()
+    monkeypatch.setattr(s, "payment_provider", "razorpay")
+    monkeypatch.setattr(s, "razorpay_key_id", "rzp_test_key")
+    monkeypatch.setattr(s, "razorpay_key_secret", "keysecret")
+    monkeypatch.setattr(s, "razorpay_webhook_secret", "hooksecret")
+    monkeypatch.setattr(s, "admin_emails", "")
+    fake = FakeRazorpay()
+    monkeypatch.setattr(billing.httpx, "post", fake.post)
+    monkeypatch.setattr(billing.httpx, "get", fake.get)
+    return fake
+
+
+def test_razorpay_link_then_return_turns_on_a_pass(client, razorpay):
+    h, uid = signup(client, "rzp@gmail.com")
+    assert client.get("/api/me", headers=h).json()["billing"]["gateway"] == "Razorpay"
+    r = client.post("/api/pay", headers=h, json={"plan": "month"})
+    assert r.status_code == 200 and r.json()["redirect_url"] == "https://rzp.io/rzp/abc"
+    _, url, kw = razorpay.calls[0]
+    assert url.endswith("/v1/payment_links") and kw["auth"] == ("rzp_test_key", "keysecret")
+    body = kw["json"]
+    with SessionLocal() as db:
+        pay = db.query(Payment).filter_by(user_id=uid).one()
+        assert (pay.provider, pay.gateway_ref, pay.state) == ("razorpay", "plink_TEST1", "PENDING")
+    assert body["amount"] == 69900 and body["reference_id"] == pay.merchant_order_id and len(body["reference_id"]) <= 40
+    assert body["callback_url"].endswith(f"/pay/return?o={pay.merchant_order_id}") and body["callback_method"] == "get"
+    assert body["accept_partial"] is False and body["notify"] == {"sms": False, "email": False}
+
+    order = pay.merchant_order_id
+    back = client.get(f"/pay/return?o={order}&razorpay_payment_id=pay_1&razorpay_payment_link_status=paid", follow_redirects=False)
+    assert back.headers["location"] == f"/?paid={order}"
+    assert client.post(f"/api/pay/{order}/check", headers=h).json()["state"] == "PENDING"
+    razorpay.status, razorpay.paid = "paid", 69900
+    done = client.post(f"/api/pay/{order}/check", headers=h).json()
+    assert done["state"] == "COMPLETED" and done["billing"]["pass_until"]
+    left = aware(user(uid).pass_until) - now()
+    assert timedelta(days=29, hours=23) < left <= timedelta(days=30)
+
+
+def test_razorpay_partial_or_short_payment_never_turns_on_a_pass(client, razorpay):
+    h, uid = signup(client, "rzp-short@gmail.com")
+    client.post("/api/pay", headers=h, json={"plan": "week"})
+    with SessionLocal() as db:
+        order = db.query(Payment).filter_by(user_id=uid).one().merchant_order_id
+    razorpay.status, razorpay.paid = "partially_paid", 10000
+    assert client.post(f"/api/pay/{order}/check", headers=h).json()["state"] == "PENDING"
+    razorpay.status = "paid"  # says paid, but not the full amount
+    client.post(f"/api/pay/{order}/check", headers=h)
+    assert user(uid).pass_until is None
+    razorpay.status, razorpay.paid = "expired", 0
+    assert client.post(f"/api/pay/{order}/check", headers=h).json()["state"] == "FAILED"
+
+
+def test_razorpay_webhook_signature_and_status_check(client, razorpay):
+    import hmac as _hmac
+    import json as _json
+    h, uid = signup(client, "rzp-hook@gmail.com")
+    client.post("/api/pay", headers=h, json={"plan": "week"})
+    with SessionLocal() as db:
+        order = db.query(Payment).filter_by(user_id=uid).one().merchant_order_id
+    raw = _json.dumps({"event": "payment_link.paid", "payload": {"payment_link": {"entity": {
+        "id": "plink_TEST1", "reference_id": order, "status": "paid"}}}}).encode()
+    sig = _hmac.new(b"hooksecret", raw, hashlib.sha256).hexdigest()
+    url = "/api/pay/razorpay-webhook"
+    assert client.post(url, content=raw).status_code == 401
+    assert client.post(url, content=raw, headers={"X-Razorpay-Signature": "0" * 64}).status_code == 401
+    # signed, says paid, but Razorpay's API still says created: no pass
+    assert client.post(url, content=raw, headers={"X-Razorpay-Signature": sig}).status_code == 200
+    assert user(uid).pass_until is None
+    razorpay.status, razorpay.paid = "paid", 29900
+    assert client.post(url, content=raw, headers={"X-Razorpay-Signature": sig}).status_code == 200
+    assert user(uid).pass_until is not None
+    other = b'{"event": "refund.processed", "payload": {}}'
+    assert client.post(url, content=other, headers={"X-Razorpay-Signature": _hmac.new(b"hooksecret", other, hashlib.sha256).hexdigest()}).status_code == 200
+
+
+def test_payments_follow_the_chosen_gateways_keys(monkeypatch):
+    s = get_settings()
+    for k in ("razorpay_key_id", "razorpay_key_secret", "phonepe_client_id", "phonepe_client_secret"):
+        monkeypatch.setattr(s, k, "")
+    monkeypatch.setattr(s, "payment_provider", "razorpay")
+    monkeypatch.setattr(s, "phonepe_client_id", "cid")
+    monkeypatch.setattr(s, "phonepe_client_secret", "sec")
+    assert billing.payments_on() is False  # PhonePe keys don't switch on a Razorpay setup
+    monkeypatch.setattr(s, "payment_provider", "phonepe")
+    assert billing.payments_on() is True

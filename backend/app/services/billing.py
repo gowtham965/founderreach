@@ -1,4 +1,4 @@
-"""Free trial, passes, and PhonePe payments (Standard Checkout v2).
+"""Free trial, passes, and payments through Razorpay (Payment Links) or PhonePe (Standard Checkout v2).
 
 Who can use the paid features (chat, new matches, AI drafts, follow-up drafts, LinkedIn notes):
   * everyone, while payments are off (no PhonePe keys set)
@@ -7,9 +7,9 @@ Who can use the paid features (chat, new matches, AI drafts, follow-up drafts, L
   * anyone with a pass (pass_until in the future)
 Everything already made stays visible either way.
 
-Paying: create an order with PhonePe, send the user to PhonePe's page, and on their return
-(or PhonePe's webhook) ask PhonePe for the order status from the server. Only a COMPLETED
-status for the exact amount turns a pass on, and each order can do that once.
+Paying: create an order with the gateway (PAYMENT_PROVIDER), send the user to its page, and on
+their return (or the gateway's webhook) ask the gateway for the order status from the server.
+Only a fully paid order for the exact amount turns a pass on, and each order can do that once.
 """
 import hashlib
 import hmac
@@ -60,9 +60,16 @@ class PaymentError(Exception):
 
 
 # ---------------------------------------------------------------- who has access
+def _provider() -> str:
+    return "phonepe" if get_settings().payment_provider.lower() == "phonepe" else "razorpay"
+
+
 def payments_on() -> bool:
+    """Payments (and the trial limits) are on once the active gateway's keys are set."""
     s = get_settings()
-    return bool(s.phonepe_client_id and s.phonepe_client_secret)
+    if _provider() == "phonepe":
+        return bool(s.phonepe_client_id and s.phonepe_client_secret)
+    return bool(s.razorpay_key_id and s.razorpay_key_secret)
 
 
 def _pass_active(user: User, at: datetime) -> bool:
@@ -138,6 +145,7 @@ def summary(user: User) -> dict:
     end = _trial_end(user)
     return {
         "payments": payments_on(),
+        "gateway": "PhonePe" if _provider() == "phonepe" else "Razorpay",
         "pass_until": aware(user.pass_until).isoformat() if _pass_active(user, at) else None,
         "trial_days": s.trial_days,
         "trial_ends": end.isoformat() if end else None,
@@ -174,60 +182,132 @@ def _auth_header() -> str:
 
 
 def create_order(db: Session, user: User, plan: str) -> str:
-    """Make a PhonePe order and return the PhonePe page to send the user to."""
+    """Make an order with the active gateway and return the payment page to send the user to."""
     if not payments_on():
         raise PaymentError("Payments aren't switched on yet.")
     if plan not in PLANS:
         raise PaymentError("Unknown plan.")
-    amount, _, label = PLANS[plan]
+    provider = _provider()
+    amount = PLANS[plan][0]
     order_id = f"FR{user.id}-{secrets.token_hex(6)}"
     pay = Payment(user_id=user.id, email=user.email, merchant_order_id=order_id, plan=plan,
-                  amount_paise=amount, state="CREATED")
+                  amount_paise=amount, state="CREATED", provider=provider)
     db.add(pay)
     db.commit()
+    try:
+        url = (_razorpay_create if provider == "razorpay" else _phonepe_create)(pay, user)
+    except PaymentError:
+        pay.state = "FAILED"
+        db.commit()
+        raise
+    pay.state = "PENDING"
+    db.commit()
+    return url
+
+
+def refresh(db: Session, pay: Payment) -> Payment:
+    """Ask the gateway for the order's real status; turn the pass on if it's paid in full."""
+    if pay.state == "COMPLETED" and pay.applied_at:
+        return pay
+    got = (_razorpay_status if pay.provider == "razorpay" else _phonepe_status)(pay)
+    if got is None:  # gateway unreachable: try again later
+        return pay
+    state, paid = got
+    pay.state = state
+    db.commit()
+    if state == "COMPLETED":
+        if paid != pay.amount_paise:
+            log.error("amount mismatch on %s: paid %s, expected %s", pay.merchant_order_id, paid, pay.amount_paise)
+        else:
+            _apply(db, pay)
+    return pay
+
+
+def _return_url(pay: Payment) -> str:
+    return f"{get_settings().base_url.rstrip('/')}/pay/return?o={pay.merchant_order_id}"
+
+
+def _phonepe_create(pay: Payment, user: User) -> str:
     body = {
-        "merchantOrderId": order_id,
-        "amount": amount,
+        "merchantOrderId": pay.merchant_order_id,
+        "amount": pay.amount_paise,
         "expireAfter": 1200,
-        "metaInfo": {"udf1": str(user.id), "udf2": plan},
-        "paymentFlow": {"type": "PG_CHECKOUT", "message": f"FounderReach {label}",
-                        "merchantUrls": {"redirectUrl": f"{get_settings().base_url.rstrip('/')}/pay/return?o={order_id}"}},
+        "metaInfo": {"udf1": str(user.id), "udf2": pay.plan},
+        "paymentFlow": {"type": "PG_CHECKOUT", "message": f"FounderReach {PLANS[pay.plan][2]}",
+                        "merchantUrls": {"redirectUrl": _return_url(pay)}},
     }
     r = httpx.post(f"{_hosts()['pg']}/checkout/v2/pay", json=body, timeout=20,
                    headers={"Authorization": _auth_header(), "Content-Type": "application/json"})
     data = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
     if r.status_code != 200 or not data.get("redirectUrl"):
-        log.error("PhonePe pay failed for %s: %s %s", order_id, r.status_code, r.text[:300])
-        pay.state = "FAILED"
-        db.commit()
+        log.error("PhonePe pay failed for %s: %s %s", pay.merchant_order_id, r.status_code, r.text[:300])
         raise PaymentError("Couldn't start the payment. Please try again in a few minutes.")
-    pay.phonepe_order_id = data.get("orderId")
-    pay.state = data.get("state") or "PENDING"
-    db.commit()
+    pay.gateway_ref = data.get("orderId")
     return data["redirectUrl"]
 
 
-def refresh(db: Session, pay: Payment) -> Payment:
-    """Ask PhonePe for the order's real status; turn the pass on if it's paid."""
-    if pay.state == "COMPLETED" and pay.applied_at:
-        return pay
+def _phonepe_status(pay: Payment) -> tuple[str, int | None] | None:
     r = httpx.get(f"{_hosts()['pg']}/checkout/v2/order/{pay.merchant_order_id}/status", timeout=20,
                   params={"details": "false"}, headers={"Authorization": _auth_header(), "Content-Type": "application/json"})
     if r.status_code != 200:
         log.warning("PhonePe status failed for %s: %s %s", pay.merchant_order_id, r.status_code, r.text[:300])
-        return pay
+        return None
     data = r.json()
     state = data.get("state")
-    if state in ("PENDING", "COMPLETED", "FAILED"):
-        pay.state = state
-    pay.phonepe_order_id = pay.phonepe_order_id or data.get("orderId")
-    db.commit()
-    if state == "COMPLETED":
-        if data.get("amount") != pay.amount_paise:
-            log.error("PhonePe amount mismatch on %s: paid %s, expected %s", pay.merchant_order_id, data.get("amount"), pay.amount_paise)
-        else:
-            _apply(db, pay)
-    return pay
+    return (state if state in ("PENDING", "COMPLETED", "FAILED") else pay.state), data.get("amount")
+
+
+# ---------------------------------------------------------------- Razorpay (Payment Links)
+_RZP = "https://api.razorpay.com/v1"
+_RZP_STATES = {"created": "PENDING", "partially_paid": "PENDING", "paid": "COMPLETED", "expired": "FAILED", "cancelled": "FAILED"}
+
+
+def _rzp_auth() -> tuple[str, str]:
+    s = get_settings()
+    return s.razorpay_key_id, s.razorpay_key_secret
+
+
+def _razorpay_create(pay: Payment, user: User) -> str:
+    body = {
+        "amount": pay.amount_paise,
+        "currency": "INR",
+        "accept_partial": False,
+        "reference_id": pay.merchant_order_id,  # unique, up to 40 characters
+        "description": f"FounderReach {PLANS[pay.plan][2]}",
+        "customer": {"name": (user.name or "")[:100], "email": user.email},
+        "notify": {"sms": False, "email": False},
+        "reminder_enable": False,
+        "expire_by": int(time.time()) + 30 * 60,
+        "callback_url": _return_url(pay),
+        "callback_method": "get",
+    }
+    r = httpx.post(f"{_RZP}/payment_links", json=body, auth=_rzp_auth(), timeout=20)
+    data = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
+    if r.status_code != 200 or not data.get("short_url"):
+        log.error("Razorpay link failed for %s: %s %s", pay.merchant_order_id, r.status_code, r.text[:300])
+        raise PaymentError("Couldn't start the payment. Please try again in a few minutes.")
+    pay.gateway_ref = data["id"]
+    return data["short_url"]
+
+
+def _razorpay_status(pay: Payment) -> tuple[str, int | None] | None:
+    if not pay.gateway_ref:
+        return None
+    r = httpx.get(f"{_RZP}/payment_links/{pay.gateway_ref}", auth=_rzp_auth(), timeout=20)
+    if r.status_code != 200:
+        log.warning("Razorpay status failed for %s: %s %s", pay.merchant_order_id, r.status_code, r.text[:300])
+        return None
+    data = r.json()
+    return _RZP_STATES.get(data.get("status"), pay.state), data.get("amount_paid")
+
+
+def razorpay_webhook_ok(body: bytes, signature: str | None) -> bool:
+    """Razorpay signs webhooks: X-Razorpay-Signature = HMAC-SHA256(webhook secret, raw body), hex."""
+    secret = get_settings().razorpay_webhook_secret
+    if not (secret and signature):
+        return False
+    expected = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, signature.strip())
 
 
 def _apply(db: Session, pay: Payment) -> None:
@@ -251,7 +331,7 @@ def _apply(db: Session, pay: Payment) -> None:
     log.info("pass %s for user %s until %s (order %s)", pay.plan, user.id, user.pass_until, pay.merchant_order_id)
 
 
-def webhook_ok(authorization: str | None) -> bool:
+def phonepe_webhook_ok(authorization: str | None) -> bool:
     """PhonePe signs webhooks with Authorization: SHA256(username:password)."""
     s = get_settings()
     if not (s.phonepe_webhook_user and s.phonepe_webhook_password and authorization):

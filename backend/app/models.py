@@ -180,7 +180,9 @@ class Payment(Base):
     user_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     email: Mapped[str] = mapped_column(String(255), default="")
     merchant_order_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
-    phonepe_order_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    phonepe_order_id: Mapped[str | None] = mapped_column(String(64), nullable=True)  # unused since gateway_ref
+    provider: Mapped[str | None] = mapped_column(String(16), nullable=True)  # "razorpay" | "phonepe" (None = phonepe)
+    gateway_ref: Mapped[str | None] = mapped_column(String(64), nullable=True)  # the gateway's id for this order
     plan: Mapped[str] = mapped_column(String(16))
     amount_paise: Mapped[int] = mapped_column(Integer)
     state: Mapped[str] = mapped_column(String(16), default="CREATED")  # CREATED, PENDING, COMPLETED, FAILED

@@ -11,7 +11,12 @@ class Settings(BaseSettings):
     # Shown on the Terms, Privacy, Refunds and Contact pages (payment gateways check these)
     business_name: str = "Gowtham R Gowda"
     support_email: str = ""
-    # PhonePe Payment Gateway (Standard Checkout v2). Payments, and the trial limits, are off until the keys are set.
+    # Payments, and the trial limits, are off until the active gateway's keys are set.
+    payment_provider: str = "razorpay"  # "razorpay" | "phonepe"
+    razorpay_key_id: str = ""
+    razorpay_key_secret: str = ""
+    razorpay_webhook_secret: str = ""  # set on the webhook in Razorpay's dashboard
+    # PhonePe Payment Gateway (Standard Checkout v2)
     phonepe_client_id: str = ""
     phonepe_client_secret: str = ""
     phonepe_client_version: str = "1"

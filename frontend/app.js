@@ -623,7 +623,7 @@ let justVerified = null;  // "1" or "expired", from the confirmation link's redi
   if (v) { justVerified = v; history.replaceState({}, "", "/"); }
 }
 
-/* ---------- trial & passes (PhonePe) ---------- */
+/* ---------- trial & passes (Razorpay or PhonePe) ---------- */
 let billing = null;
 const fmtDate = iso => new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
 function renderBilling(b) {
@@ -645,24 +645,26 @@ function openPlans(why) {
   if (!billing?.payments) return;
   $("#plans-why").textContent = why || "New matches every morning, founder emails, drafts in your voice and follow-up reminders.";
   $("#plans-error").textContent = "";
+  $("#plans-via").textContent = billing.gateway ? `, through ${billing.gateway}` : "";
   const grid = $("#plan-grid"); grid.textContent = "";
   for (const p of billing.plans) {
     const best = p.days >= 30;
     const card = el("div", `plan${best ? " best" : ""}`);
     if (best) card.append(el("span", "plan-tag", "Best value"));
     const price = el("p", "plan-price"); price.append(`₹${p.price}`, el("small", "", ` / ${p.days} days`));
-    const buy = el("button", `btn ${best ? "primary" : "dark"}`, `Pay ₹${p.price} with PhonePe`); buy.type = "button";
+    const payLabel = `Pay ₹${p.price}`;
+    const buy = el("button", `btn ${best ? "primary" : "dark"}`, payLabel); buy.type = "button";
     buy.addEventListener("click", async () => {
       grid.querySelectorAll("button").forEach(b => b.disabled = true);
-      buy.textContent = "Opening PhonePe…";
+      buy.textContent = `Opening ${billing.gateway}…`;
       try {
         const { redirect_url } = await api("/api/pay", { method: "POST", json: { plan: p.id } });
-        if (!/^https:\/\/[^/]*phonepe\.com\//.test(redirect_url)) throw new Error("Unexpected payment page. Please try again.");
+        if (!/^https:\/\/([^/]*\.)?(phonepe\.com|razorpay\.com|rzp\.io)\//.test(redirect_url)) throw new Error("Unexpected payment page. Please try again.");
         location.assign(redirect_url);
       } catch (err) {
         $("#plans-error").textContent = err.message;
         grid.querySelectorAll("button").forEach(b => b.disabled = false);
-        buy.textContent = `Pay ₹${p.price} with PhonePe`;
+        buy.textContent = payLabel;
       }
     });
     card.append(el("h3", "", p.label), price, el("p", "plan-per", `about ₹${Math.round(p.price / p.days)} a day`), buy);
@@ -676,14 +678,14 @@ $("#plan-pill").addEventListener("click", () => openPlans(billing?.pass_until
 $("#plans-close").addEventListener("click", () => $("#plans").close());
 $("#plans").addEventListener("click", e => { if (e.target.id === "plans") $("#plans").close(); });  // tap outside
 
-// Back from PhonePe: /pay/return sends people to /?paid=<order>. Ask our server (which asks PhonePe) what happened.
+// Back from the gateway: /pay/return sends people to /?paid=<order>. Ask our server (which asks the gateway) what happened.
 let paidOrder = null;
 {
   const o = new URLSearchParams(location.search).get("paid");
   if (o) { paidOrder = o; history.replaceState({}, "", "/"); }
 }
 async function checkPayment(order) {
-  banner("Checking your payment with PhonePe…");
+  banner("Checking your payment…");
   for (let i = 0; i < 10; i++) {
     let r;
     try { r = await api(`/api/pay/${encodeURIComponent(order)}/check`, { method: "POST" }); }
@@ -697,7 +699,7 @@ async function checkPayment(order) {
     }
     await new Promise(res => setTimeout(res, 3000));
   }
-  banner("PhonePe is still confirming your payment. Your pass turns on by itself once it does; check back in a few minutes.");
+  banner("The bank is still confirming your payment. Your pass turns on by itself once it does; check back in a few minutes.");
 }
 
 /* ---------- account ---------- */

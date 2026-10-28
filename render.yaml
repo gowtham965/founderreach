@@ -7,8 +7,9 @@ services:
     runtime: python
     plan: starter            # paid plans keep running; free ones sleep, which stops the daily jobs
     region: singapore        # closest to Bengaluru
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --no-proxy-headers  # client IP: app.main.client_ip
+    # backend/ is the Python app; it also serves frontend/ (plain HTML/CSS/JS, no build step) at /static
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT --no-proxy-headers  # client IP: app.main.client_ip
     healthCheckPath: /healthz
     disk:
       name: data
@@ -50,7 +51,15 @@ services:
         sync: false
       - key: HUNTER_API_KEY
         sync: false
-      # PhonePe Payment Gateway: payments and the trial limits stay off until the client id and secret are set
+      # Payments: the trial limits and the pass button stay off until the active gateway's keys are set
+      - key: PAYMENT_PROVIDER     # razorpay or phonepe
+        value: razorpay
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+      - key: RAZORPAY_WEBHOOK_SECRET
+        sync: false
       - key: PHONEPE_ENV          # "sandbox" while testing, "production" for real money
         value: sandbox
       - key: PHONEPE_CLIENT_ID

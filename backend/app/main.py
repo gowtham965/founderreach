@@ -28,7 +28,7 @@ from app.services import billing, discovery, email_check, google_login, mailer, 
 from app.services import wa_bot, whatsapp
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-STATIC = Path(__file__).resolve().parent.parent / "static"
+STATIC = Path(__file__).resolve().parents[2] / "frontend"  # served at /static
 
 
 @asynccontextmanager
@@ -472,26 +472,27 @@ def api_stop(match_id: int, user: User = Depends(current_user), db: Session = De
     return matching.match_card(o.match)
 
 
-# ---------- passes & PhonePe ----------
+# ---------- passes & payments (Razorpay or PhonePe) ----------
 class PayIn(BaseModel):
     plan: str
 
 
 @app.post("/api/pay")
 def api_pay(body: PayIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
-    """Start a PhonePe payment; the browser goes to the returned PhonePe page."""
+    """Start a payment; the browser goes to the gateway's payment page."""
     try:
         return {"redirect_url": billing.create_order(db, user, body.plan)}
     except billing.PaymentError as exc:
         raise HTTPException(400 if not billing.payments_on() or body.plan not in billing.PLANS else 503, str(exc)) from exc
     except httpx.HTTPError as exc:
-        logging.getLogger(__name__).exception("PhonePe unreachable")
-        raise HTTPException(503, "Couldn't reach PhonePe. Please try again in a few minutes.") from exc
+        logging.getLogger(__name__).exception("payment gateway unreachable")
+        raise HTTPException(503, "Couldn't reach the payment gateway. Please try again in a few minutes.") from exc
 
 
 @app.get("/pay/return", include_in_schema=False)
 def pay_return(o: str = ""):
-    """PhonePe sends the browser back here. The app then checks the order (signed in) and shows the result."""
+    """The gateway sends the browser back here (Razorpay adds its own query fields, which we don't need: the
+    status is fetched from the gateway). The app then checks the order (signed in) and shows the result."""
     return RedirectResponse(f"/?paid={o}" if billing.ORDER_ID_RE.match(o) else "/", status_code=303)
 
 
@@ -503,7 +504,7 @@ def api_pay_check(order_id: str, user: User = Depends(current_user), db: Session
     try:
         pay = billing.refresh(db, pay)
     except (billing.PaymentError, httpx.HTTPError):
-        logging.getLogger(__name__).exception("PhonePe status check failed")
+        logging.getLogger(__name__).exception("payment status check failed")
     db.refresh(user)
     return {"state": pay.state, "plan": pay.plan, "billing": billing.summary(user)}
 
@@ -511,7 +512,7 @@ def api_pay_check(order_id: str, user: User = Depends(current_user), db: Session
 @app.post("/api/pay/webhook", include_in_schema=False)
 async def pay_webhook(request: Request, db: Session = Depends(get_db)):
     """PhonePe's server-to-server notice. The body is only a hint: the status comes from PhonePe's API."""
-    if not billing.webhook_ok(request.headers.get("authorization")):
+    if not billing.phonepe_webhook_ok(request.headers.get("authorization")):
         raise HTTPException(401, "bad signature")
     try:
         data = json.loads(await request.body())
@@ -525,6 +526,29 @@ async def pay_webhook(request: Request, db: Session = Depends(get_db)):
         except (billing.PaymentError, httpx.HTTPError):
             logging.getLogger(__name__).exception("PhonePe status check failed (webhook)")
             raise HTTPException(503, "try again")  # PhonePe retries
+    return {"ok": True}
+
+
+@app.post("/api/pay/razorpay-webhook", include_in_schema=False)
+async def razorpay_webhook(request: Request, db: Session = Depends(get_db)):
+    """Razorpay's server-to-server notice (payment_link.paid and friends). Signed over the raw body; the
+    status itself is then fetched from Razorpay's API."""
+    body = await request.body()
+    if not billing.razorpay_webhook_ok(body, request.headers.get("x-razorpay-signature")):
+        raise HTTPException(401, "bad signature")
+    try:
+        data = json.loads(body)
+        link = data["payload"]["payment_link"]["entity"]
+        order_id = str(link.get("reference_id") or "")
+    except (ValueError, KeyError, TypeError):
+        return {"ok": True}  # other events (payments, refunds) carry no link: nothing to do
+    pay = db.scalar(select(Payment).where(Payment.merchant_order_id == order_id)) if billing.ORDER_ID_RE.match(order_id) else None
+    if pay is not None:
+        try:
+            billing.refresh(db, pay)
+        except (billing.PaymentError, httpx.HTTPError):
+            logging.getLogger(__name__).exception("Razorpay status check failed (webhook)")
+            raise HTTPException(503, "try again")  # Razorpay retries
     return {"ok": True}
 
 

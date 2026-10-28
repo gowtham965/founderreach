@@ -12,7 +12,7 @@ from pathlib import Path
 from app.config import get_settings
 from app.services.billing import price_line
 
-_STATIC = Path(__file__).resolve().parent.parent / "static"
+_STATIC = Path(__file__).resolve().parents[2] / "frontend"
 
 
 def asset_v() -> str:

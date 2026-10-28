@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# One-command local setup + run (macOS / Linux).
+# One-command local setup + run (macOS / Linux). Lives in backend/; the virtualenv sits at the repo root.
 #   ./run.sh          start the app on http://localhost:8000
 #   ./run.sh test     run the test suite
 #   ./run.sh demo     start with the offline fake LLM (no API key needed)
 set -euo pipefail
 cd "$(dirname "$0")"
 
-if [ ! -d .venv ]; then
+if [ ! -d ../.venv ]; then
   echo "Creating virtualenv…"
-  python3 -m venv .venv
+  python3 -m venv ../.venv
 fi
-source .venv/bin/activate
+source ../.venv/bin/activate
 pip install -q --upgrade pip
 pip install -q -r requirements.txt
 

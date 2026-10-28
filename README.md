@@ -9,14 +9,14 @@ draft) until they say the founder replied.
 ## Run it on your Mac
 
 ```bash
-cd founderreach
+cd founderreach/backend
 chmod +x run.sh
 ./run.sh demo        # try the whole flow offline with a fake LLM, no keys needed
 ```
 Open http://localhost:8000, create an account, attach a resume, then type "find me startups".
 In demo mode the startup pool is empty until you run discovery (see below) or seed it.
 
-For real use, put your key in `.env` (created on first run) and start normally:
+For real use, put your key in `backend/.env` (created on first run) and start normally:
 ```bash
 ANTHROPIC_API_KEY=sk-ant-...   # in .env
 ./run.sh
@@ -72,14 +72,17 @@ allowance are charged from October 2026).
 ## How it's built
 
 ```
-app/
-  main.py              FastAPI routes + serves the web app
+backend/                 the Python app (run everything from here)
+ app/
+  main.py              FastAPI routes + serves frontend/ at /static
   agent.py             chat agent: tool-use loop, approval check on send
   llm/                 provider-neutral LLM layer
     anthropic_provider.py   Claude (default)
+    openai_provider.py      OpenAI: LLM_PROVIDER=openai
     ollama_provider.py      local models: LLM_PROVIDER=ollama
     fake_provider.py        deterministic, for tests and demo
   services/
+    billing.py         free trial, passes, Razorpay / PhonePe payments
     profile.py         resume → structured profile
     discovery.py       YC hiring list + startup news RSS → startup pool
     matching.py        keyword prefilter → LLM scores fit with a reason
@@ -89,9 +92,11 @@ app/
     whatsapp.py        WhatsApp Cloud API: replies only, webhook checks, media, card text
     wa_bot.py          what the bot does with each incoming WhatsApp message
   scheduler.py         daily discovery + matches, follow-up reminders
-prompts/email_style.md the writing rules every draft follows
-static/                web UI (plain HTML/CSS/JS, no build step)
-tests/                 end-to-end tests with the fake LLM, no network
+ prompts/email_style.md the writing rules every draft follows
+ tests/                 end-to-end tests with the fake LLM, no network
+ requirements.txt, run.sh, .env.example
+frontend/                web UI: index.html, app.js, styles.css, brand/ (plain HTML/CSS/JS, no build step)
+render.yaml              Render blueprint (builds and starts from backend/)
 ```
 
 ### Guardrails (enforced in code, not just the prompt)
@@ -106,9 +111,9 @@ tests/                 end-to-end tests with the fake LLM, no network
 - Users can only act on their own matches; `DELETE /api/me` wipes an account.
 
 ### How emails are made to sound human
-1. The first draft follows `prompts/email_style.md` (edit it anytime, no restart).
+1. The first draft follows `backend/prompts/email_style.md` (edit it anytime, no restart).
 2. A humanize pass rewrites it using the [humanize-writing](https://github.com/jpeggdev/humanize-writing)
-   skill (MIT, vendored in `prompts/humanize/`), with email limits on top: same facts, same ask,
+   skill (MIT, vendored in `backend/prompts/humanize/`), with email limits on top: same facts, same ask,
    no longer than before, no em dashes or emojis.
 3. A linter built from the skill's word lists checks the result. If tells remain ("leverage",
    "I hope this finds you well", em dashes…), the rewrite runs once more with those named.
@@ -146,10 +151,10 @@ Nothing else changes. Use a 14B+ model with tool calling; smaller ones write gen
 and fumble tool use. Compare quality with the same resume before switching users over.
 
 ### AI costs
-Every model call's token usage is stored. See what the AI really cost, per kind of work:
+Every model call's token usage is stored. See what the AI really cost, per kind of work (from `backend/`):
 ```bash
-.venv/bin/python -m app.cost_report        # last 7 days, in ₹ (python -m app.cost_report 30 88 for 30 days at ₹88/$)
-.venv/bin/python scripts/cache_probe.py    # checks prompt caching works (needs ANTHROPIC_API_KEY; a few paise)
+../.venv/bin/python -m app.cost_report        # last 7 days, in ₹ (python -m app.cost_report 30 88 for 30 days at ₹88/$)
+../.venv/bin/python scripts/cache_probe.py    # checks prompt caching works (needs ANTHROPIC_API_KEY; a few paise)
 ```
 What keeps it down (`app/llm/anthropic_provider.py`):
 - **Prompt caching**: tools and instructions are cached on every call; chat also caches its history,
@@ -183,7 +188,8 @@ Good next ones: Product Hunt API (needs a token), Wellfound, careers-page crawli
 Don't scrape LinkedIn; it breaks their terms and gets accounts banned.
 
 ## Deploying
-Works on Render/Railway/Fly as one web process: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`.
+Works on Render/Railway/Fly as one web process: `cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+(`render.yaml` already does this).
 Set `BASE_URL` to your public URL, switch `DATABASE_URL` to Postgres, and run a single instance
 so the scheduler doesn't run jobs twice (or move `scheduler.py` jobs to a separate worker).
 
