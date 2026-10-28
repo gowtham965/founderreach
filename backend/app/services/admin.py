@@ -12,7 +12,7 @@ from app.auth import is_admin
 from app.config import get_settings
 from app.llm.usage import cost_usd
 from app.models import ChatMessage, LLMUsage, Match, Outreach, Payment, Profile, User, aware, now
-from app.services.ops import INR_PER_USD
+from app.llm.usage import INR_PER_USD
 
 
 def _day(dt) -> str:

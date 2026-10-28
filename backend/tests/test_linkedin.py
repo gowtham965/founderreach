@@ -10,7 +10,8 @@ os.environ.setdefault("NEWS_FEEDS", "")
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
-from app import agent, main  # noqa: E402
+from app import main  # noqa: E402
+from app.agents import chat as agent  # noqa: E402
 from app.db import SessionLocal  # noqa: E402
 from app.models import User  # noqa: E402
 from app.services import outreach, profile  # noqa: E402
@@ -104,14 +105,14 @@ def test_saved_link_is_shown_back(user, monkeypatch):
     """So a typo gets caught: the assistant is told exactly which link was saved."""
     db, u = user
     seen = {}
-    real = agent.chat.get_llm()
+    real = agent.loop.get_llm()
 
     class Spy:
         def chat(self, system, messages, tools, **kw):
             seen["system"], seen["last"] = system, messages[-1]["content"]
             return real.chat(system, messages, tools, **kw)
 
-    monkeypatch.setattr(agent.chat, "get_llm", lambda: Spy())
+    monkeypatch.setattr(agent.loop, "get_llm", lambda: Spy())
     agent.respond(db, u, "linkedin.com/in/asha-rao-blr")
     assert 'Saved: https://www.linkedin.com/in/asha-rao-blr (tap to check it\'s you)' in seen["last"]
     assert "Note for this turn" not in seen["system"]  # per-turn notes stay out of the cached system prompt

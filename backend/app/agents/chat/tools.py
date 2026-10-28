@@ -8,7 +8,8 @@ from sqlalchemy.orm import Session
 
 from app.llm import Tool
 from app.models import Match, User
-from app.services import billing, matching, outreach, pow as pow_svc, profile as profile_svc, research as research_svc
+from app.agents import proof_of_work as pow_svc, research as research_svc
+from app.services import billing, matching, outreach, profile as profile_svc
 
 log = logging.getLogger(__name__)
 

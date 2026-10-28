@@ -6,9 +6,9 @@ from datetime import datetime, timezone
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.agent.cards import card_refs
-from app.agent.prompts import AI_UNAVAILABLE, SYSTEM, WHATSAPP_NOTE
-from app.agent.tools import TOOLS, _run_tool
+from app.agents.chat.cards import card_refs
+from app.agents.chat.prompts import AI_UNAVAILABLE, SYSTEM, WHATSAPP_NOTE
+from app.agents.chat.tools import TOOLS, _run_tool
 from app.auth import is_admin
 from app.config import get_settings
 from app.llm import get_llm

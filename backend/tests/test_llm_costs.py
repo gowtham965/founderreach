@@ -92,7 +92,7 @@ def test_usage_recorded_and_reported(llm):
 
 def test_history_window_moves_in_steps():
     """The prefix sent to the model stays identical for ten turns, then jumps."""
-    from app.agent import _history
+    from app.agents.chat import _history
     init_db()
     with SessionLocal() as db:
         u = User(email=f"hist{os.urandom(3).hex()}@example.com", password_hash="x")

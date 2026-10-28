@@ -17,7 +17,8 @@ from app.config import get_settings
 from app.db import SessionLocal
 from app.llm import usage
 from app.models import JobRun, User
-from app.services import alerts, backup, billing, discovery, matching, ops, outreach
+from app.agents import ops
+from app.services import alerts, backup, billing, discovery, matching, outreach
 
 log = logging.getLogger(__name__)
 _scheduler: BackgroundScheduler | None = None

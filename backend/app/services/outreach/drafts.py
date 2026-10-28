@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.llm import get_llm
 from app.llm import usage
 from app.models import Match, Outreach, User
-from app.services import research as research_svc
+from app.agents import research as research_svc
 from app.services.humanize import humanize
 from app.services.outreach import enrich
 from app.services.outreach.common import OutreachError, _owned_match, _use_draft_quota, require_confirmed, with_linkedin

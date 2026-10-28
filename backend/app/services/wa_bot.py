@@ -11,7 +11,7 @@ import re
 
 from sqlalchemy.orm import Session
 
-from app import agent
+from app.agents import chat as agent
 from app.auth import create_token
 from app.config import get_settings
 from app.models import ChatMessage, User, now

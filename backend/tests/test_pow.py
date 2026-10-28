@@ -71,7 +71,7 @@ def test_someone_elses_match_is_off_limits(client, match):
 
 
 def test_chat_can_suggest_proof_of_work(client, match, monkeypatch):
-    from app import agent
+    from app.agents import chat as agent
     h, mid, _ = match
     with SessionLocal() as db:
         u = db.get(Match, mid).user

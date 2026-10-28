@@ -47,7 +47,7 @@ def _startup_act(fn):
 
 def recheck(ids: list[int]) -> None:
     """Look up founders, emails and research again (background; uses Hunter lookups when nothing is published)."""
-    from app.services import research
+    from app.agents import research
     for sid in ids:
         with SessionLocal() as db:
             s = db.get(Startup, sid)

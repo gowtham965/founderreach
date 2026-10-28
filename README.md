@@ -77,14 +77,15 @@ backend/                 the Python app (run everything from here)
   main.py              creates the app, adds security middleware, plugs in the routers
   web/                 one router per area: auth, account (chat, resume), match (card buttons), pay,
                        admin, startup (database), whatsapp, public (pages, health); security.py
-  agent/               the chat assistant: prompts, tools, chat loop, cards
+  agents/              the AI agents: chat/ (assistant: prompts, tools, loop, cards), research.py,
+                       proof_of_work.py, ops.py
   llm/                 provider-neutral AI layer (Claude, OpenAI, Ollama, fake) + usage and cost caps
   services/
     contacts/          founder contact waterfall: fetch, names, website, emails, jobs, waterfall
     discovery/         startup pool: focus, yc, news, articles, startup_map, pool
     billing/           trial and passes: plans, access, orders, razorpay, phonepe
     outreach/          drafts, tracking (sent/replied), follow-ups, enrich, prompts
-    profile.py, matching.py, research.py, pow.py, humanize.py, ops.py, alerts.py,
+    profile.py, matching.py, humanize.py, alerts.py,
     backup.py, admin.py, startups_admin.py, whatsapp.py, wa_bot.py, mailer.py, ...
   scheduler.py         daily discovery + matches, follow-ups, ops report, backup
  prompts/              email_style.md and the humanize skill

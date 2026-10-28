@@ -11,7 +11,7 @@ os.environ.update(LLM_PROVIDER="fake", DATABASE_URL=f"sqlite:///{_db}", SCHEDULE
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
-from app import agent  # noqa: E402
+from app.agents import chat as agent  # noqa: E402
 from app.db import SessionLocal  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models import Outreach, Startup, User  # noqa: E402

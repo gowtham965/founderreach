@@ -12,7 +12,8 @@ import pytest  # noqa: E402
 
 from app.db import SessionLocal, init_db  # noqa: E402
 from app.models import Startup, now  # noqa: E402
-from app.services import contacts, research  # noqa: E402
+from app.agents import research  # noqa: E402
+from app.services import contacts  # noqa: E402
 
 HOME = """<html><body><h1>Acme builds inference infra for Indian languages.</h1>
 <a href="/blog/launch-v2">We launched Acme v2</a> <a href="/careers">Careers</a> <a href="/login">Log in</a>

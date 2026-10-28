@@ -10,7 +10,8 @@ from app import scheduler
 from app.auth import current_user
 from app.db import get_db
 from app.models import ChatMessage, User
-from app.services import admin as admin_svc, alerts, backup, ops
+from app.agents import ops
+from app.services import admin as admin_svc, alerts, backup
 from app.web.security import require_admin
 
 router = APIRouter()

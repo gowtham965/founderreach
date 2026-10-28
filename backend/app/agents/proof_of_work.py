@@ -17,7 +17,7 @@ from app.llm import usage
 from app.models import Match, User
 from app.services import billing
 from app.services import outreach
-from app.services import research as research_svc
+from app.agents import research as research_svc
 from app.services.profile import profile_brief
 
 IDEAS_SYSTEM = """You help a job seeker stand out to a startup founder by making something small and useful for that

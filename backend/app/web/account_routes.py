@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import agent
+from app.agents import chat as agent
 from app.auth import current_user, is_admin
 from app.db import get_db
 from app.llm import usage

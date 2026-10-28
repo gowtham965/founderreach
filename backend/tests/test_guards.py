@@ -10,7 +10,8 @@ os.environ.setdefault("SCHEDULER_ENABLED", "false")
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
-from app import agent, main  # noqa: E402
+from app import main  # noqa: E402
+from app.agents import chat as agent  # noqa: E402
 from app.config import get_settings  # noqa: E402
 from app.db import SessionLocal  # noqa: E402
 from app.llm import usage  # noqa: E402

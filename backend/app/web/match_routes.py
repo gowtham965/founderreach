@@ -10,7 +10,8 @@ from app.auth import current_user
 from app.db import get_db
 from app.llm import usage
 from app.models import Match, User
-from app.services import billing, matching, outreach, pow as pow_svc
+from app.agents import proof_of_work as pow_svc
+from app.services import billing, matching, outreach
 
 router = APIRouter()
 log = logging.getLogger(__name__)

@@ -9,7 +9,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.agent import SYSTEM, TOOLS  # noqa: E402
+from app.agents.chat import SYSTEM, TOOLS  # noqa: E402
 from app.config import get_settings  # noqa: E402
 from app.llm.anthropic_provider import AnthropicLLM  # noqa: E402
 from app.services.discovery import focus_label  # noqa: E402

@@ -10,7 +10,8 @@ os.environ.setdefault("SCHEDULER_ENABLED", "false")
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
-from app import agent, main, scheduler  # noqa: E402
+from app import main, scheduler  # noqa: E402
+from app.agents import chat as agent  # noqa: E402
 from app.config import get_settings  # noqa: E402
 from app.db import SessionLocal  # noqa: E402
 from app.models import ChatMessage, Profile, Startup, User  # noqa: E402
@@ -66,7 +67,7 @@ def test_D_client_ip_ignores_spoofed_entries(client):
 def test_E_ai_unavailable_gets_a_reply(client, monkeypatch):
     def broken():
         raise RuntimeError("ANTHROPIC_API_KEY is not set")
-    monkeypatch.setattr(agent.chat, "get_llm", broken)
+    monkeypatch.setattr(agent.loop, "get_llm", broken)
     _, h = signup(client, "noai@gmail.com")
     r = client.post("/api/chat", headers=h, json={"message": "find me startups"})
     assert r.status_code == 200 and r.json()["reply"] == agent.AI_UNAVAILABLE

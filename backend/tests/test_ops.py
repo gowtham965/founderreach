@@ -14,7 +14,7 @@ from app import main  # noqa: E402
 from app.config import get_settings  # noqa: E402
 from app.db import SessionLocal  # noqa: E402
 from app.models import ChatMessage, JobRun, LLMUsage, Payment, User, now  # noqa: E402
-from app.services import ops  # noqa: E402
+from app.agents import ops  # noqa: E402
 
 
 @pytest.fixture(scope="module")
