@@ -234,7 +234,10 @@
     <section id="chat" class="chat">
       <ol id="messages" class="messages" aria-live="polite"></ol>
       <div class="dock">
-        <div class="quick" id="quick" aria-label="Suggestions"></div>
+        <div class="dock-row">
+          <button type="button" class="clear-chat" id="clear-chat" hidden title="Clears the conversation. Your matches, drafts and follow-ups stay in Pipeline.">🧹 Clear chat</button>
+          <div class="quick" id="quick" aria-label="Suggestions"></div>
+        </div>
         <form id="composer" class="composer">
           <label class="clip" title="Attach your resume or LinkedIn PDF">
             <input type="file" id="resume" accept=".pdf,.txt,.md" hidden>

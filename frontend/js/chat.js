@@ -48,19 +48,6 @@ function hello() {  // the top of the chat: a namaskara, like the landing page
   const k = el("span", "kn namaskara"); k.append(el("span", "flag", "ನಮಸ್ಕಾರ"));
   li.append(k, el("h2", "", myName ? `Hi ${myName.split(" ")[0]}, let's find your next startup.` : "Let's find your next startup."),
     el("p", "", "Seed-stage teams in Namma Bengaluru that just raised, and the founder's inbox for each."));
-  const clear = el("button", "clear-chat", "Clear chat"); clear.type = "button";
-  clear.addEventListener("click", async () => {
-    if (clear.dataset.armed !== "1") {  // two taps instead of a browser dialog
-      clear.dataset.armed = "1";
-      clear.textContent = "Tap again to clear. Your matches and drafts stay in Pipeline.";
-      setTimeout(() => { clear.dataset.armed = ""; clear.textContent = "Clear chat"; }, 5000);
-      return;
-    }
-    clear.disabled = true;
-    try { await api("/api/chat", { method: "DELETE" }); await loadChat(); }
-    catch (err) { clear.textContent = err.message; clear.disabled = false; }
-  });
-  li.append(clear);
   list.appendChild(li);
 }
 const QUICK = [
@@ -83,11 +70,26 @@ export function quick(profile) {
     q.appendChild(b);
   }
 }
+// Clear chat: always in reach above the message box; two taps instead of a browser dialog
+const clearBtn = $("#clear-chat");
+const CLEAR_LABEL = "🧹 Clear chat";
+clearBtn.addEventListener("click", async () => {
+  if (clearBtn.dataset.armed !== "1") {
+    clearBtn.dataset.armed = "1";
+    clearBtn.textContent = "Tap again to clear (Pipeline stays)";
+    setTimeout(() => { clearBtn.dataset.armed = ""; clearBtn.textContent = CLEAR_LABEL; }, 5000);
+    return;
+  }
+  clearBtn.disabled = true;
+  try { await api("/api/chat", { method: "DELETE" }); clearBtn.dataset.armed = ""; clearBtn.textContent = CLEAR_LABEL; await loadChat(); }
+  catch (err) { clearBtn.textContent = err.message; }
+  clearBtn.disabled = false;
+});
 export async function loadChat() {
   list.textContent = "";
   hello();
   const rows = await api("/api/chat");
-  list.querySelector(".clear-chat").hidden = !rows.length;  // nothing to clear yet
+  $("#clear-chat").hidden = !rows.length;  // nothing to clear yet
   rows.forEach(r => { addMsg(r.role, r.content, r.unread ? "unread" : ""); addCards(r.cards); });
   lastId = rows.length ? rows[rows.length - 1].id : 0;
 }
@@ -109,6 +111,7 @@ $("#composer").addEventListener("submit", async e => {
   if (!text || busy) return;
   input.value = ""; input.style.height = "auto";
   addMsg("user", text);
+  clearBtn.hidden = false;
   busy = true; $("#send-btn").disabled = true; $("#quick").classList.add("busy");
   const typing = addMsg("assistant", "thinking…", "typing");
   try {
