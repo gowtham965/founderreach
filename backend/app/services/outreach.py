@@ -20,6 +20,7 @@ from app.config import get_settings
 from app.llm import get_llm
 from app.models import ChatMessage, Match, Outreach, Startup, User, aware, now
 from app.services import contacts as contacts_svc
+from app.services import research as research_svc
 from app.services.humanize import humanize
 from app.services.profile import profile_brief
 
@@ -53,6 +54,7 @@ What they do: {one_liner}
 Why now: {signal}
 Why it fits: {reason}
 {roles}
+{research}
 (If one open role clearly fits the candidate, name it in one short clause. Otherwise don't mention roles.)
 Recipient: {recipient}
 {current}{instructions}
@@ -110,6 +112,7 @@ def draft(db: Session, user: User, match_id: int, instructions: str = "") -> Out
         m.outreach = o  # keep the cached relationship in sync (sessions don't expire on commit)
         db.add(o)
     s = enrich_startup(db, m.startup)
+    research = research_svc.research_startup(db, s)  # something specific and recent to open with
     if not o.to_email:
         best = (s.contacts or [None])[0]
         if best:
@@ -120,7 +123,8 @@ def draft(db: Session, user: User, match_id: int, instructions: str = "") -> Out
         draft_system(),
         DRAFT_PROMPT.format(profile=profile_brief(user.profile), name=user.name or "", startup=s.name,
                             domain=s.domain or "", one_liner=s.one_liner, signal=s.signal, reason=m.reason,
-                            roles=_roles_line(s), recipient=o.to_name or "the founder", current=current, instructions=extra),
+                            roles=_roles_line(s), research=research_svc.brief_for_prompt(research),
+                            recipient=o.to_name or "the founder", current=current, instructions=extra),
         task="draft_email",
     )
     h = humanize(data.get("subject") or o.subject or f"Intro: {s.name}", data.get("body") or o.body)

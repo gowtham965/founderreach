@@ -19,7 +19,7 @@ from app.llm import usage
 log = logging.getLogger(__name__)
 
 # Structured, checkable, high-volume work: the fast model handles it.
-FAST_TASKS = {"extract_startups", "score_matches", "extract_founders", "extract_profile"}
+FAST_TASKS = {"extract_startups", "score_matches", "extract_founders", "extract_profile", "research_pick", "research"}
 # The user (and founders) read these word for word: their own model setting.
 DRAFT_TASKS = {"draft_email", "humanize", "followup", "dm_note"}
 

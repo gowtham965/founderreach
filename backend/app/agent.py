@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.llm import Tool, get_llm
 from app.models import ChatMessage, Match, User
-from app.services import billing, discovery, matching, outreach, profile as profile_svc
+from app.services import billing, discovery, matching, outreach, profile as profile_svc, research as research_svc
 
 log = logging.getLogger(__name__)
 
@@ -71,6 +71,9 @@ TOOLS = [
                                            "notes": {"type": "string"}}},
         },
     }),
+    Tool("research_startup", "Research a matched startup (its site and funding news): what it does, recent launches and "
+         "news with sources, and specific openers for an email. Use when the user asks about a startup.",
+         {"type": "object", "properties": {"match_id": {"type": "integer"}}, "required": ["match_id"]}),
     Tool("find_matches", "Find new startups that fit the user now (from the discovered pool).", {"type": "object", "properties": {}}),
     Tool("list_matches", "List the user's matches, optionally filtered by status (new, drafted, sent, replied, skipped).", {
         "type": "object", "properties": {"status": {"type": "string"}}}),
@@ -152,6 +155,13 @@ def _run_tool(db: Session, user: User, name: str, args: dict, latest_user_text: 
                 cards.append({"type": "matches", "items": items})
             return {"ok": True, "new_matches": [{k: c[k] for k in ("match_id", "name", "one_liner", "stage", "signal", "reason", "score")} for c in items]
                     or "No new fits in today's pool. New startups are added every morning."}
+        if name == "research_startup":
+            m = db.get(Match, int(args["match_id"]))
+            if m is None or m.user_id != user.id:
+                return {"ok": False, "error": f"No match #{args['match_id']}"}
+            billing.require_access(db, user)
+            r = research_svc.research_startup(db, m.startup)
+            return {"ok": True, "research": r or "Couldn't find anything specific on their site or in the news."}
         if name == "list_matches":
             q = select(Match).where(Match.user_id == user.id)
             if args.get("status"):

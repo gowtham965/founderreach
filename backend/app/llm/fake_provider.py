@@ -76,4 +76,12 @@ class FakeLLM(LLM):
             return {"note": "Saw your seed round. I build LLM apps in Python and cut API latency 40%. Open to a quick chat? Test"}
         if task == "extract_startups":
             return []
+        if task == "research_pick":
+            return {"urls": re.findall(r"^(https?://\S+) \|", prompt, re.M)[:3]}
+        if task == "research":
+            src = re.findall(r"^\[(https?://[^\]]+)\]", prompt, re.M)
+            first = src[-1] if src else ""
+            return {"what_they_do": "Builds software for testing.", "building": ["inference"],
+                    "recent": [{"fact": "Launched a new product last month.", "source": first}] if first else [],
+                    "hooks": [{"line": "Saw you launched a new product last month.", "source": first}] if first else []}
         return json.loads("{}")

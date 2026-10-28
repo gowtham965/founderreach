@@ -155,6 +155,8 @@ def match_card(m: Match) -> dict:
                      for f in (s.founders or [])][:4],
         "contacts": (s.contacts or [])[:5] if confirmed else [],
         "jobs": (s.jobs or [])[:6],
+        # what the research agent found (shared per startup); shown so the user can check the draft's facts
+        "research": {k: (s.research or {}).get(k) for k in ("what_they_do", "recent", "hooks")} if s.research else None,
         "confirmed": confirmed,
         "outreach": None if o is None else {
             "status": o.status, "to_email": o.to_email, "to_name": o.to_name, "to_confidence": o.to_confidence,

@@ -407,6 +407,15 @@ a { color: var(--a1); }
 .why { margin: .85rem 0 0; font-size: 0.94rem; padding: .6rem .8rem; border-radius: 12px; background: linear-gradient(100deg, #f3f2ff, #faf3ff); display: flex; gap: .55rem; align-items: baseline; }
 .why b { flex: none; font-size: .7rem; letter-spacing: .1em; text-transform: uppercase; color: var(--a2); }
 .why[hidden] { display: none; }
+.found { margin-top: .6rem; font-size: .9rem; }
+.found summary { cursor: pointer; font-weight: 700; color: var(--soft); }
+.found summary:hover { color: var(--ink); }
+.found[open] summary { margin-bottom: .35rem; }
+.found-what { margin: 0 0 .3rem; }
+.found ul { margin: 0; padding-left: 1.1rem; }
+.found li { margin: .2rem 0; }
+.found li a { color: var(--faint); font-size: .8rem; }
+.found li a:hover { color: var(--a1); }
 .envelope { margin-top: 0.9rem; padding: 0.95rem; border-radius: 14px; background: var(--card-2); border: 1px solid var(--line); font-family: var(--font-letter); }
 .envelope .to, .envelope .subj { margin: 0; font-family: var(--font-ui); font-size: 0.9rem; color: var(--soft); }
 .envelope .subj { color: var(--ink); font-weight: 700; margin-bottom: 0.6rem; }

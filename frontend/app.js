@@ -428,6 +428,7 @@ function letter(m) {
     $(".postmark", el).style.setProperty("--p", Math.round(m.score));
     $(".why-text", el).textContent = m.reason || "";
     $(".why", el).hidden = !m.reason;
+    renderFound(m);
     const o = m.outreach, env = $(".envelope", el), acts = $(".actions", el), state = $(".state", el);
     acts.textContent = ""; state.className = "state"; state.textContent = "";
     env.hidden = !o || !o.body;
@@ -506,6 +507,21 @@ function letter(m) {
     state.textContent = `Sent ${when}.${next}`;
     btn("They replied", "ghost", () => act("replied"));
     if (o.next_followup_at) btn("Stop reminders", "ghost", () => act("stop-followups"));
+  };
+  const renderFound = (m) => {  // the research agent's brief: facts the draft may lean on, each with its source
+    const r = m.research, box = $(".found", el), body = $(".found-body", el);
+    body.textContent = "";
+    box.hidden = !r || !(r.what_they_do || (r.recent || []).length);
+    if (box.hidden) return;
+    if (r.what_they_do) { const p = document.createElement("p"); p.className = "found-what"; p.textContent = r.what_they_do; body.append(p); }
+    const ul = document.createElement("ul");
+    for (const f of r.recent || []) {
+      const li = document.createElement("li"); li.append(f.fact, " ");
+      const a = document.createElement("a"); a.href = f.source; a.target = "_blank"; a.rel = "noopener";
+      try { a.textContent = new URL(f.source).hostname.replace(/^www\./, ""); } catch { a.textContent = "source"; }
+      li.append(a); ul.appendChild(li);
+    }
+    if (ul.children.length) body.append(ul);
   };
   const renderExtra = (m) => {
     const box = $(".extra", el), people = $(".people", el), roles = $(".roles", el), dm = $(".dm", el);
