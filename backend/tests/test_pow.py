@@ -26,7 +26,7 @@ def match(client, monkeypatch):
     main._FAILS.clear()
     main._SIGNUPS.clear()
     monkeypatch.setattr(contacts, "_get", lambda url, **kw: None)  # no network: no site, no research
-    monkeypatch.setattr(outreach, "enrich_startup", lambda db, s, force=False: s)
+    monkeypatch.setattr(outreach.enrich, "enrich_startup", lambda db, s, force=False: s)
     r = client.post("/api/auth/signup", json={"email": f"pow{os.urandom(3).hex()}@gmail.com", "password": "password123"})
     h = {"Authorization": f"Bearer {r.json()['token']}"}
     with SessionLocal() as db:
