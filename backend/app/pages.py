@@ -17,7 +17,7 @@ _STATIC = Path(__file__).resolve().parents[2] / "frontend"
 
 def asset_v() -> str:
     """Changes whenever the CSS or JS changes, so browsers fetch the new files, not a stale cached copy."""
-    files = sorted([*_STATIC.glob("*.css"), *_STATIC.glob("css/*.css"), *_STATIC.glob("js/*.js")])
+    files = sorted([*_STATIC.glob("css/*.css"), *_STATIC.glob("js/*.js")])
     return hashlib.sha256(b"".join(f.read_bytes() for f in files)).hexdigest()[:10]
 
 UPDATED = "26 October 2026"  # bump when the wording or prices change
@@ -33,7 +33,8 @@ _SHELL = """<!doctype html>
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&display=swap" rel="stylesheet">
   <link rel="icon" href="/favicon.ico" sizes="any">
   <link rel="icon" href="/static/brand/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/static/styles.css?v={v}">
+  <link rel="stylesheet" href="/static/css/base.css?v={v}">
+  <link rel="stylesheet" href="/static/css/landing.css?v={v}">
 </head>
 <body>
   <main class="legal">

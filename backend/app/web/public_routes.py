@@ -1,5 +1,6 @@
 """No sign-in needed: the web app's page, the landing page's live data, policy pages, favicon and health check."""
 import logging
+import re
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -20,10 +21,8 @@ STATIC = Path(__file__).resolve().parents[3] / "frontend"  # served at /static
 @router.api_route("/", include_in_schema=False, methods=["GET", "HEAD"])
 def index():
     v = pages.asset_v()  # versioned links: after a deploy, browsers load the new CSS and JS
-    return HTMLResponse((STATIC / "index.html").read_text()
-                        .replace('/static/styles.css"', f'/static/styles.css?v={v}"')
-                        .replace('/static/js/main.js"', f'/static/js/main.js?v={v}"')
-                        .replace("</body>", pages.analytics_tag() + "</body>"))
+    html = re.sub(r'(/static/(?:css/[\w-]+\.css|js/main\.js))"', rf'\1?v={v}"', (STATIC / "index.html").read_text())
+    return HTMLResponse(html.replace("</body>", pages.analytics_tag() + "</body>"))
 
 
 @router.get("/api/public/ip")
