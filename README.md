@@ -74,28 +74,28 @@ allowance are charged from October 2026).
 ```
 backend/                 the Python app (run everything from here)
  app/
-  main.py              FastAPI routes + serves frontend/ at /static
-  agent.py             chat agent: tool-use loop, approval check on send
-  llm/                 provider-neutral LLM layer
-    anthropic_provider.py   Claude (default)
-    openai_provider.py      OpenAI: LLM_PROVIDER=openai
-    ollama_provider.py      local models: LLM_PROVIDER=ollama
-    fake_provider.py        deterministic, for tests and demo
+  main.py              creates the app, adds security middleware, plugs in the routers
+  web/                 one router per area: auth, account (chat, resume), match (card buttons), pay,
+                       admin, startup (database), whatsapp, public (pages, health); security.py
+  agent/               the chat assistant: prompts, tools, chat loop, cards
+  llm/                 provider-neutral AI layer (Claude, OpenAI, Ollama, fake) + usage and cost caps
   services/
-    billing.py         free trial, passes, Razorpay / PhonePe payments
-    profile.py         resume → structured profile
-    discovery.py       YC hiring list + startup news RSS → startup pool
-    matching.py        keyword prefilter → LLM scores fit with a reason
-    contacts.py        founder contact waterfall (see below)
-    humanize.py        humanize-writing pass + AI-tell linter
-    outreach.py        drafts, compose links, sent/replied, follow-up reminders, guardrails
-    whatsapp.py        WhatsApp Cloud API: replies only, webhook checks, media, card text
-    wa_bot.py          what the bot does with each incoming WhatsApp message
-  scheduler.py         daily discovery + matches, follow-up reminders
- prompts/email_style.md the writing rules every draft follows
- tests/                 end-to-end tests with the fake LLM, no network
+    contacts/          founder contact waterfall: fetch, names, website, emails, jobs, waterfall
+    discovery/         startup pool: focus, yc, news, articles, startup_map, pool
+    billing/           trial and passes: plans, access, orders, razorpay, phonepe
+    outreach/          drafts, tracking (sent/replied), follow-ups, enrich, prompts
+    profile.py, matching.py, research.py, pow.py, humanize.py, ops.py, alerts.py,
+    backup.py, admin.py, startups_admin.py, whatsapp.py, wa_bot.py, mailer.py, ...
+  scheduler.py         daily discovery + matches, follow-ups, ops report, backup
+ prompts/              email_style.md and the humanize skill
+ tests/                end-to-end tests with the fake LLM, no network
  requirements.txt, run.sh, .env.example
-frontend/                web UI: index.html, app.js, styles.css, brand/ (plain HTML/CSS/JS, no build step)
+frontend/                no build step
+ index.html
+ js/                   ES modules: main (wiring), core, urlstate, auth, landing, hero, chat, cards,
+                       pipeline, billing, shell, admin, admin-startups
+ css/                  base, landing, app, cards, plans, admin (loaded in that order)
+ brand/                logo, favicons
 render.yaml              Render blueprint (builds and starts from backend/)
 ```
 

@@ -1,61 +1,16 @@
-"""The chat agent: one tool-using loop per user message.
-
-The model decides what to do; the tools (and the outreach service under them)
-enforce the rules. FounderReach never sends email: the user sends drafts from their own
-inbox. Marking something sent or replied needs the user's own latest message to say so,
-so a confused model can't rewrite their pipeline.
-"""
-import json
+"""The chat assistant's tools: what it may do (TOOLS) and running one (_run_tool). The services enforce the rules;
+marking an email sent or replied also needs the user's own latest message to say so (user_said_so)."""
 import logging
 import re
-from datetime import datetime, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.auth import is_admin
-from app.config import get_settings
-from app.llm import Tool, get_llm
-from app.llm import usage
-from app.models import ChatMessage, Match, User
-from app.services import billing, discovery, matching, outreach, pow as pow_svc, profile as profile_svc, research as research_svc
+from app.llm import Tool
+from app.models import Match, User
+from app.services import billing, matching, outreach, pow as pow_svc, profile as profile_svc, research as research_svc
 
 log = logging.getLogger(__name__)
-
-SYSTEM = """You are FounderReach, a job agent that helps people land interviews at early-stage
-startups by emailing founders directly. You chat like a friendly, sharp recruiter: short
-messages, plain words, no corporate tone, no walls of text.
-
-How you work:
-1. Learn about the user. If they have no profile, ask for their resume or LinkedIn PDF (they attach
-   it with the paperclip) or a short description, plus what they want: roles, sectors, remote or
-   in-office. Ask them to paste their LinkedIn profile link (open their profile and copy the
-   address; in the phone app: Share profile → Copy link) and save it with
-   update_profile(linkedin=...); it goes into their emails so founders can look them up. When you
-   save it, show it back exactly as "Saved: <link> (tap to check it's you)" so typos get caught.
-   You cannot open LinkedIn pages, so a link alone tells you nothing about their background: if
-   that's all they share, say so and ask for the resume or LinkedIn PDF (LinkedIn: profile → More
-   → Save to PDF). Save preferences with update_profile. Right now FounderReach only covers {focus};
-   if they ask for other cities or later stages, say so plainly and that more is coming.
-2. Find startups that fit with find_matches. Present the top few with the one-line reason.
-3. When they pick one, call draft_email and show the draft. They can ask for edits (call
-   draft_email again with their instructions) or set a founder email with set_recipient.
-4. You never send email. The user sends the draft themselves from their own email: the draft
-   card has "Open in Gmail" and "Open in my email app" buttons that prefill everything. If they
-   say "send", explain that and point them to the button. Mention when the address is a guess.
-5. When they say they sent it, call mark_sent. You'll remind them to follow up after a few days
-   with a fresh short draft (best sent as a reply to their first email); mark_followup_sent when
-   they've sent that. When they say a founder replied, call mark_replied: reminders stop.
-   cancel_followups stops reminders without a reply.
-
-Founder emails come with a confidence: verified, public (published by the company), likely,
-inbox (shared founders@/hello@ inbox) or guess. Say plainly when it's a guess or inbox and offer
-the alternatives: another address, a LinkedIn/X note they send themselves (write_dm), or applying
-through the startup's open role if one fits (share the link). You never message anyone on LinkedIn.
-
-Be honest: you can't guarantee interviews, and guessed emails may bounce. Refer to startups by
-name and #match_id so the user can say "draft #12". Today's user profile:
-{profile}"""
 
 TOOLS = [
     Tool("update_profile", "Save what the user told you about their background or what they want next.", {
@@ -123,25 +78,6 @@ def user_said_so(text: str) -> bool:
         if s and not s.endswith("?") and _SAID_SO.search(s) and not _NEGATE.search(s):
             return True
     return False
-
-
-def _history(db: Session, user: User, keep: int = 30, step: int = 10) -> list[dict]:
-    """The last 30-39 messages. The window's start moves in steps of 10, not one message per turn,
-    so the conversation prefix stays byte-identical (and cached) for ten turns at a time."""
-    total = db.scalar(select(func.count(ChatMessage.id)).where(ChatMessage.user_id == user.id)) or 0
-    start = max(0, (total - keep) // step * step)
-    rows = db.scalars(select(ChatMessage).where(ChatMessage.user_id == user.id)
-                      .order_by(ChatMessage.id).offset(start)).all()
-    msgs = [{"role": r.role, "content": r.content} for r in rows]
-    while msgs and msgs[0]["role"] != "user":  # providers want the first turn to be the user's
-        msgs.pop(0)
-    merged: list[dict] = []
-    for m in msgs:  # merge same-role neighbours (e.g. two notifications in a row)
-        if merged and merged[-1]["role"] == m["role"]:
-            merged[-1]["content"] += "\n\n" + m["content"]
-        else:
-            merged.append(dict(m))
-    return merged
 
 
 def _run_tool(db: Session, user: User, name: str, args: dict, latest_user_text: str, cards: list) -> dict:
@@ -222,120 +158,3 @@ def _run_tool(db: Session, user: User, name: str, args: dict, latest_user_text: 
         log.exception("tool %s failed", name)
         db.rollback()
         return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
-
-
-AI_UNAVAILABLE = "Sorry, my AI side isn't available right now. Please try again in a few minutes."
-
-WHATSAPP_NOTE = """
-
-The user is chatting on WhatsApp, not the website. Files come in via 📎 → Document (not a
-paperclip button). WhatsApp formatting: *bold*, _italic_, no markdown headings or tables. Keep
-messages short. They open their dashboard by typing "dashboard". Drafts come with an "Open in
-Gmail" link they tap to send it themselves. Startup cards and drafts are shown to them automatically after
-your message, so don't repeat a draft's full text."""
-
-
-def over_daily_chat_cap(db: Session, user: User) -> bool:
-    """Counts today's message; True once the user is past MAX_CHATS_PER_DAY. Admins are never capped."""
-    if is_admin(user):
-        return False
-    today = datetime.now(timezone.utc).date().isoformat()
-    used = (user.chats_used or 0) if user.chats_day == today else 0
-    if used >= get_settings().max_chats_per_day:
-        return True
-    user.chats_day, user.chats_used = today, used + 1
-    db.commit()
-    return False
-
-
-@usage.charged
-def respond(db: Session, user: User, text: str, max_steps: int = 6, channel: str = "web") -> dict:
-    db.add(ChatMessage(user_id=user.id, role="user", content=text))
-    db.query(ChatMessage).filter(ChatMessage.user_id == user.id, ChatMessage.unread.is_(True)).update({"unread": False})
-    db.commit()
-
-    try:
-        billing.use_chat(db, user)
-    except billing.PaywallError as exc:  # trial used up: answer with the offer instead of spending AI
-        db.add(ChatMessage(user_id=user.id, role="assistant", content=str(exc)))
-        db.commit()
-        return {"reply": str(exc), "cards": [], "paywall": True}
-
-    if over_daily_chat_cap(db, user):
-        msg = (f"That's {get_settings().max_chats_per_day} messages today, the daily limit. The buttons on your cards "
-               "(draft, I sent it, they replied) still work, and chat opens again tomorrow.")
-        db.add(ChatMessage(user_id=user.id, role="assistant", content=msg))
-        db.commit()
-        return {"reply": msg, "cards": []}
-
-    profile_svc.get_or_create_profile(db, user)
-    just_saved = ""
-    if "linkedin.com/in/" in text.lower():  # a pasted profile link is saved directly, not left to the model
-        try:
-            url = profile_svc.update_profile(db, user, linkedin=text).links["linkedin"]
-            just_saved = f'[Note for this turn: just saved their LinkedIn link {url}. Show it back: "Saved: {url} (tap to check it\'s you)".]'
-        except ValueError:
-            pass
-    system = SYSTEM.format(profile=profile_svc.profile_brief(user.profile),
-                           focus=discovery.focus_label()) + (WHATSAPP_NOTE if channel == "whatsapp" else "")
-    messages = _history(db, user)
-    if just_saved and messages and messages[-1]["role"] == "user":
-        # per-turn notes ride in the user turn, so the cached system prompt stays byte-stable
-        messages[-1]["content"] += "\n\n" + just_saved
-    cards: list[dict] = []
-    reply = ""
-    try:
-        llm = get_llm()
-        for _ in range(max_steps):
-            resp = llm.chat(system, messages, TOOLS, task="chat", cache_history=True)
-            if not resp.tool_calls:
-                reply = resp.text.strip()
-                break
-            messages.append({"role": "assistant", "content": resp.text, "tool_calls": [tc.as_dict() for tc in resp.tool_calls],
-                             "raw": resp.raw})
-            for tc in resp.tool_calls:
-                result = _run_tool(db, user, tc.name, tc.input or {}, text, cards)
-                messages.append({"role": "tool", "tool_call_id": tc.id, "name": tc.name, "content": json.dumps(result, default=str)})
-        else:
-            reply = "I got a bit tangled there. Could you say that again?"
-    except usage.UserBudgetExceeded as exc:  # this user's AI cost cap for today
-        db.rollback()
-        reply = str(exc)
-    except Exception:  # missing key, outage, rate limit: answer anyway, never leave the message hanging
-        log.exception("chat reply failed for user %s", user.id)
-        db.rollback()
-        reply = AI_UNAVAILABLE
-
-    reply = reply or "Done."
-    db.add(ChatMessage(user_id=user.id, role="assistant", content=reply, cards=card_refs(cards) or None))
-    db.commit()
-    return {"reply": reply, "cards": cards}
-
-
-def card_refs(cards: list[dict]) -> list[dict]:
-    """What to remember about a reply's cards: just match ids. A startup drafted then marked sent
-    in one turn is remembered once, at its last position."""
-    refs, seen = [], set()
-    for c in reversed(cards):
-        if c.get("type") == "matches":
-            refs.append({"type": "matches", "ids": [i["match_id"] for i in c.get("items", [])]})
-        elif c.get("item") and c["item"]["match_id"] not in seen:
-            seen.add(c["item"]["match_id"])
-            refs.append({"type": "draft", "id": c["item"]["match_id"]})
-    return list(reversed(refs))
-
-
-def rebuild_cards(db: Session, user: User, refs: list[dict] | None) -> list[dict]:
-    """Cards for a stored reply, from current data. Matches that no longer exist are dropped."""
-    out = []
-    for ref in refs or []:
-        if ref.get("type") == "matches":
-            items = [matching.match_card(m) for m in (db.get(Match, i) for i in ref.get("ids", []))
-                     if m is not None and m.user_id == user.id]
-            if items:
-                out.append({"type": "matches", "items": items})
-        else:
-            m = db.get(Match, ref.get("id"))
-            if m is not None and m.user_id == user.id:
-                out.append({"type": "draft", "item": matching.match_card(m)})
-    return out

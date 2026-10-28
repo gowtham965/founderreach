@@ -104,14 +104,14 @@ def test_saved_link_is_shown_back(user, monkeypatch):
     """So a typo gets caught: the assistant is told exactly which link was saved."""
     db, u = user
     seen = {}
-    real = agent.get_llm()
+    real = agent.chat.get_llm()
 
     class Spy:
         def chat(self, system, messages, tools, **kw):
             seen["system"], seen["last"] = system, messages[-1]["content"]
             return real.chat(system, messages, tools, **kw)
 
-    monkeypatch.setattr(agent, "get_llm", lambda: Spy())
+    monkeypatch.setattr(agent.chat, "get_llm", lambda: Spy())
     agent.respond(db, u, "linkedin.com/in/asha-rao-blr")
     assert 'Saved: https://www.linkedin.com/in/asha-rao-blr (tap to check it\'s you)' in seen["last"]
     assert "Note for this turn" not in seen["system"]  # per-turn notes stay out of the cached system prompt
