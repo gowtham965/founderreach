@@ -100,6 +100,9 @@ class Startup(Base):
     research: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     researched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # admin curation (Admin → Startups): hidden ones never reach users; edited fields are never overwritten by discovery
+    # open roles (app/services/jobs/): `jobs` caches the open ones for cards and drafts; the Job table keeps history
+    jobs_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    job_boards: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # {"boards": {"lever": "acme"}, "guessed_at": iso}
     hidden: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     hidden_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
     edited: Mapped[list | None] = mapped_column(JSON, nullable=True)
@@ -211,3 +214,22 @@ class JobRun(Base):
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)
     ok: Mapped[bool] = mapped_column(Boolean, default=True)
     detail: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # e.g. {"fetch_news": 2, "fetch_startup_map": 0}
+
+
+class Job(Base):
+    """One open (or since closed) role at a startup, from its job board or careers page. Closed after two misses."""
+    __tablename__ = "jobs"
+    __table_args__ = (UniqueConstraint("startup_id", "url"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    startup_id: Mapped[int] = mapped_column(ForeignKey("startups.id"), index=True)
+    title: Mapped[str] = mapped_column(String(255))
+    team: Mapped[str] = mapped_column(String(255), default="")
+    location: Mapped[str] = mapped_column(String(255), default="")
+    remote: Mapped[bool] = mapped_column(Boolean, default=False)
+    url: Mapped[str] = mapped_column(String(1000))
+    board: Mapped[str] = mapped_column(String(32))  # greenhouse, lever, ashby, workable, smartrecruiters, recruitee, breezy, careers_page
+    posted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # as the board says, if it does
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    missed: Mapped[int] = mapped_column(Integer, default=0)  # checks in a row it was missing from a board that answered
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)

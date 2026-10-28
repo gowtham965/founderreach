@@ -145,3 +145,16 @@ def test_recheck_validates_the_gap(client, admin, monkeypatch):
     monkeypatch.setattr(startup_routes, "recheck", lambda ids: None)  # no network
     assert client.post("/api/admin/startups/recheck", headers=h, json={"issue": "everything"}).status_code == 422
     assert client.post("/api/admin/startups/recheck", headers=h, json={"issue": "no_founder_email"}).json()["ok"]
+
+
+def test_hiring_filter_and_roles_count(client, admin):
+    h, _ = admin
+    sid = find(client, h, focus="yes")["rows"][0]["id"]
+    with SessionLocal() as db:
+        s = db.get(Startup, sid)
+        s.jobs, s.jobs_checked_at = [{"title": "Backend Engineer", "url": "https://x/1"}], now()
+        db.commit()
+    hiring = find(client, h, hiring="yes")
+    assert [r["id"] for r in hiring["rows"]] == [sid] and hiring["rows"][0]["open_roles"] == 1
+    assert sid not in [r["id"] for r in find(client, h, hiring="no")["rows"]]
+    assert hiring["summary"]["hiring_focus"] >= 1

@@ -5,6 +5,7 @@
   hourly                         follow-up reminders (writes the draft; the user sends it)
   daily  {ops_report_hour}:00 IST    ops report to the admins (app/services/ops.py)
   daily  {backup_hour}:00 IST        database backup, last 7 kept (app/services/backup.py)
+  daily  {jobs_hour}:00 IST          open roles: focus startups nightly, the rest weekly (app/services/jobs/)
 For multiple server instances, move these to a single worker process or a cron service.
 """
 import logging
@@ -18,7 +19,7 @@ from app.db import SessionLocal
 from app.llm import usage
 from app.models import JobRun, User
 from app.agents import ops
-from app.services import alerts, backup, billing, discovery, matching, outreach
+from app.services import alerts, backup, billing, discovery, jobs, matching, outreach
 
 log = logging.getLogger(__name__)
 _scheduler: BackgroundScheduler | None = None
@@ -95,6 +96,17 @@ def job_followups():
         raise
 
 
+def job_jobs():
+    """Open roles: every focus startup nightly, the rest weekly (app/services/jobs/)."""
+    try:
+        with SessionLocal() as db:
+            stats = jobs.run(db)
+        record("jobs", stats["failed"] < max(3, stats["checked"] // 10), stats)
+    except Exception as exc:
+        log.exception("job refresh failed")
+        record("jobs", False, {"error": str(exc)[:200]})
+
+
 def job_backup():
     if backup.db_path() is None:  # not SQLite: the database provider backs it up
         return
@@ -124,6 +136,7 @@ def start():
     _scheduler.add_job(job_followups, "interval", hours=1, id="followups")
     _scheduler.add_job(job_ops_report, "cron", hour=s.ops_report_hour_ist, minute=0, id="ops_report")
     _scheduler.add_job(job_backup, "cron", hour=s.backup_hour_ist, minute=0, id="backup")
+    _scheduler.add_job(job_jobs, "cron", hour=s.jobs_hour_ist, minute=0, id="jobs")
     _scheduler.start()
     log.info("scheduler started")
 

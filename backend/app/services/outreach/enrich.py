@@ -23,7 +23,9 @@ def enrich_startup(db: Session, s: Startup, force: bool = False) -> Startup:
         log.warning("enrichment failed for %s: %s", s.name, exc)
         return s
     s.founders = data["founders"] or s.founders or []
-    s.contacts, s.jobs, s.github_org, s.enriched_at = data["contacts"], data["jobs"], data["github"], now()
+    s.contacts, s.github_org, s.enriched_at = data["contacts"], data["github"], now()
+    if not s.jobs_checked_at:  # the nightly roles refresh (app/services/jobs/) is fresher once it has run
+        s.jobs = data["jobs"]
     db.commit()
     return s
 

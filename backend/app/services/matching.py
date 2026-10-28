@@ -155,6 +155,7 @@ def match_card(m: Match) -> dict:
                      for f in (s.founders or [])][:4],
         "contacts": (s.contacts or [])[:5] if confirmed else [],
         "jobs": (s.jobs or [])[:6],
+        "open_roles": len(s.jobs or []),  # the badge counts all of them, the card lists the first six
         # what the research agent found (shared per startup); shown so the user can check the draft's facts
         "research": {k: (s.research or {}).get(k) for k in ("what_they_do", "recent", "hooks")} if s.research else None,
         "pow": m.pow,

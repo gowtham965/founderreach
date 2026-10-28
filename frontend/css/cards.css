@@ -17,6 +17,7 @@
 .tags:empty { display: none; }
 .tag { font-size: .76rem; font-weight: 600; padding: .12rem .55rem; border-radius: 999px; background: var(--card-2); border: 1px solid var(--line); color: var(--soft); white-space: nowrap; }
 .tag.t-stage { background: #eef0ff; border-color: #d6daff; color: var(--a1); }
+.tag.t-hiring { background: #ecfbf2; border-color: #b9ead0; color: #0f7a3d; white-space: normal; }
 .tag.t-signal { background: #fff3ea; border-color: #ffd9c2; color: #c4511d; }
 .tags .via { color: var(--faint); font-size: .76rem; margin-left: .15rem; }
 .tags .via:hover { color: var(--a1); }

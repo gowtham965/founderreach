@@ -9,7 +9,7 @@ document.querySelectorAll(".admin-seg button").forEach(b => b.addEventListener("
   if (b.dataset.view === "startups") loadStartups();
 }));
 const ISSUES = { no_founder_email: "No founder email", no_founder: "No founder name", no_website: "No website", not_checked: "Not looked up yet" };
-const stState = { q: "", stage: "", city: "", source: "", focus: "", issue: "", hidden: "", sort: "new", page: 1 };
+const stState = { q: "", stage: "", city: "", source: "", focus: "", issue: "", hidden: "", sort: "new", hiring: "", page: 1 };
 let stTimer = null, stRows = [], stEditing = null;
 const fillSelect = (sel, counts, label) => {
   const keep = sel.value, first = sel.options[0];
@@ -24,7 +24,7 @@ async function loadStartups() {
   stRows = d.rows;
   const s = d.summary;
   $("#st-summary").textContent = `${s.all} startups in the database · ${s.in_focus} Bangalore seed (what users see) · ` +
-    `${s.added_7d} added this week · ${s.hidden} hidden`;
+    `${s.added_7d} added this week · ${s.hiring_focus} of the Bangalore seed ones hiring · ${s.hidden} hidden`;
   const box = $("#st-issues"); box.textContent = "";
   for (const [k, label] of Object.entries(ISSUES)) {
     const b = mk("button", `qchip${stState.issue === k ? " on" : ""}`, `${label} · ${s.issues[k] || 0}`); b.type = "button";
@@ -42,10 +42,10 @@ async function loadStartups() {
   }
   $("#st-quality-note").textContent = "Counts are for visible startups. Re-checks can use Hunter lookups.";
   fillSelect($("#st-stage"), s.stages); fillSelect($("#st-city"), s.cities); fillSelect($("#st-source"), s.sources);
-  table($("#st-tbl"), ["Startup", "Stage", "Where", "Source", "Founder email", "Matched", "Added"], d.rows.map(r => {
+  table($("#st-tbl"), ["Startup", "Stage", "Where", "Source", "Founder email", "Open roles", "Matched", "Added"], d.rows.map(r => {
     const who = mk("div"); who.append(mk("b", "", r.name), r.domain ? mk("small", "", ` ${r.domain}`) : "",
       r.hidden ? mk("small", "warn-t", " hidden") : "", r.in_focus ? "" : mk("small", "", " · outside focus"));
-    return [who, r.stage || "?", (r.location || "?").slice(0, 40), r.source || "?", r.founder_email ? "✓" : "—", r.matches,
+    return [who, r.stage || "?", (r.location || "?").slice(0, 40), r.source || "?", r.founder_email ? "✓" : "—", r.jobs_checked_at ? r.open_roles : "not checked", r.matches,
             r.discovered_at ? ago(r.discovered_at) : "?"];
   }));
   [...$("#st-tbl").tBodies[0].rows].forEach((tr, i) => { if (stRows[i]) { tr.classList.add("click"); tr.addEventListener("click", () => openStartup(stRows[i])); } });
@@ -53,7 +53,7 @@ async function loadStartups() {
   $("#st-page").textContent = `${d.total} found · page ${d.page} of ${pages}`;
   $("#st-prev").disabled = d.page <= 1; $("#st-next").disabled = d.page >= pages;
 }
-for (const [id, key] of [["#st-focus", "focus"], ["#st-stage", "stage"], ["#st-city", "city"], ["#st-source", "source"], ["#st-hidden", "hidden"], ["#st-sort", "sort"]])
+for (const [id, key] of [["#st-focus", "focus"], ["#st-stage", "stage"], ["#st-city", "city"], ["#st-source", "source"], ["#st-hidden", "hidden"], ["#st-sort", "sort"], ["#st-hiring", "hiring"]])
   $(id).addEventListener("change", e => { stState[key] = e.target.value; stState.page = 1; loadStartups(); });
 $("#st-q").addEventListener("input", e => { stState.q = e.target.value; stState.page = 1; clearTimeout(stTimer); stTimer = setTimeout(loadStartups, 300); });
 $("#st-prev").addEventListener("click", () => { stState.page--; loadStartups(); });

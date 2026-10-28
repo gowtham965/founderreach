@@ -27,6 +27,13 @@ export function letter(m) {
     if (m.location) tag(`📍 ${m.location.replace(/,?\s*(Bengaluru|Bangalore)(,.*)?$/i, "") || "Bengaluru"}`);
     const signal = (m.signal || "").replace(/^(pre-?seed|seed)( stage)?,?\s*/i, "");  // the stage is already a tag
     if (signal) tag(signal.replace(/^./, c => c.toUpperCase()), "t-signal");
+    const jobs = m.jobs || [];
+    if (jobs.length) {  // open roles from their job board or careers page (refreshed nightly)
+      const days = jobs[0].posted ? Math.max(0, Math.round((Date.now() - new Date(jobs[0].posted)) / 864e5)) : null;
+      const when = days === null ? "" : days === 0 ? " · posted today" : ` · posted ${days}d ago`;
+      const total = m.open_roles || jobs.length;
+      tag(`Hiring: ${jobs[0].title}${total > 1 ? ` +${total - 1} more` : ""}${when}`, "t-hiring");
+    }
     if (m.source === "startup_map" && m.source_url) {  // credit the directory this came from
       const a = document.createElement("a"); a.href = m.source_url; a.target = "_blank"; a.rel = "noopener";
       a.className = "via"; a.textContent = "via Bangalore Startup Map";

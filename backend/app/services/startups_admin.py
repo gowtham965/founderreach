@@ -61,14 +61,15 @@ def row(s: Startup, matches: int = 0) -> dict:
         "founders": s.founders or [], "contacts": s.contacts or [], "jobs": s.jobs or [], "research": s.research,
         "founder_email": email["email"] if email else None,
         "in_focus": in_focus(s.location, s.stage), "hidden": bool(s.hidden), "hidden_reason": s.hidden_reason or "",
-        "edited": s.edited or [], "quality": quality(s), "matches": matches,
+        "edited": s.edited or [], "quality": quality(s), "matches": matches, "open_roles": len(s.jobs or []),
+        "jobs_checked_at": aware(s.jobs_checked_at).isoformat() if s.jobs_checked_at else None,
         "discovered_at": aware(s.discovered_at).isoformat() if s.discovered_at else None,
         "enriched_at": aware(s.enriched_at).isoformat() if s.enriched_at else None,
     }
 
 
 def listing(db: Session, q: str = "", stage: str = "", city: str = "", source: str = "", focus: str = "",
-            issue: str = "", hidden: str = "", sort: str = "new", page: int = 1, per_page: int = 50) -> dict:
+            issue: str = "", hidden: str = "", sort: str = "new", page: int = 1, per_page: int = 50, hiring: str = "") -> dict:
     everything = db.scalars(select(Startup)).all()
     match_counts = dict(db.execute(select(Match.startup_id, func.count()).group_by(Match.startup_id)).all())
     ql = q.strip().lower()
@@ -88,12 +89,14 @@ def listing(db: Session, q: str = "", stage: str = "", city: str = "", source: s
             return False
         if focus == "no" and in_focus(s.location, s.stage):
             return False
+        if hiring and bool(s.jobs) != (hiring == "yes"):
+            return False
         return not issue or issue in quality(s)
 
     rows = [s for s in everything if keep(s)]
     old = datetime(2000, 1, 1, tzinfo=timezone.utc)
     key = {"new": lambda s: aware(s.discovered_at) or old, "name": lambda s: s.name.lower(),
-           "matches": lambda s: match_counts.get(s.id, 0)}.get(sort, lambda s: aware(s.discovered_at) or old)
+           "matches": lambda s: match_counts.get(s.id, 0), "roles": lambda s: len(s.jobs or [])}.get(sort, lambda s: aware(s.discovered_at) or old)
     rows.sort(key=key, reverse=sort != "name")
     page = max(1, page)
     visible = [s for s in everything if not s.hidden]
@@ -104,6 +107,8 @@ def listing(db: Session, q: str = "", stage: str = "", city: str = "", source: s
             "all": len(visible), "in_focus": sum(in_focus(s.location, s.stage) for s in visible),
             "hidden": len(everything) - len(visible),
             "added_7d": sum(aware(s.discovered_at) >= now() - timedelta(days=7) for s in visible if s.discovered_at),
+            "hiring": sum(bool(s.jobs) for s in visible),
+            "hiring_focus": sum(bool(s.jobs) for s in visible if in_focus(s.location, s.stage)),
             "issues": dict(Counter(i for s in visible for i in quality(s))),
             "sources": dict(Counter(s.source or "?" for s in visible)),
             "stages": dict(Counter(normalize_stage(s.stage) or "?" for s in visible)),

@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.auth import current_user
 from app.db import SessionLocal, get_db
 from app.models import Startup, User
-from app.services import outreach, startups_admin
+from app.services import jobs, outreach, startups_admin
 from app.web.security import require_admin
 
 router = APIRouter()
@@ -46,7 +46,7 @@ def _startup_act(fn):
 
 
 def recheck(ids: list[int]) -> None:
-    """Look up founders, emails and research again (background; uses Hunter lookups when nothing is published)."""
+    """Look up founders, emails, research and open roles again (background; may use Hunter lookups)."""
     from app.agents import research
     for sid in ids:
         with SessionLocal() as db:
@@ -56,16 +56,17 @@ def recheck(ids: list[int]) -> None:
             try:
                 outreach.enrich_startup(db, s, force=True)
                 research.research_startup(db, s, force=True)
+                jobs.refresh_startup(db, s)
             except Exception:
                 log.exception("re-check failed for startup %s", sid)
 
 
 @router.get("/api/admin/startups")
 def admin_startups(q: str = "", stage: str = "", city: str = "", source: str = "", focus: str = "", issue: str = "",
-                   hidden: str = "", sort: str = "new", page: int = 1, user: User = Depends(current_user),
+                   hidden: str = "", sort: str = "new", page: int = 1, hiring: str = "", user: User = Depends(current_user),
                    db: Session = Depends(get_db)):
     require_admin(user)
-    return startups_admin.listing(db, q[:100], stage, city[:60], source, focus, issue, hidden, sort, page)
+    return startups_admin.listing(db, q[:100], stage, city[:60], source, focus, issue, hidden, sort, page, hiring=hiring)
 
 
 @router.post("/api/admin/startups")
@@ -84,7 +85,7 @@ def admin_edit_startup(startup_id: int, body: StartupIn, user: User = Depends(cu
 def admin_recheck_startup(startup_id: int, user: User = Depends(current_user)):
     require_admin(user)
     threading.Thread(target=recheck, args=([startup_id],), daemon=True).start()
-    return {"ok": True, "message": "Checking again: founders, emails and research update in a minute."}
+    return {"ok": True, "message": "Checking again: founders, emails, research and open roles update in a minute."}
 
 
 @router.post("/api/admin/startups/recheck")
