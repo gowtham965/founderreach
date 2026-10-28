@@ -112,6 +112,9 @@ async function demoLoop() {
   while (demoOn) {
     if ($("#auth").hidden || document.hidden) { await sleep(1000); continue; }
     if (!demoOn) break;
+    // keep the box's height while it refills: on phones it sits above the rest of the page, and an emptied box
+    // made everything below jump ~500px mid-scroll
+    if (res.offsetHeight) res.style.minHeight = `${res.offsetHeight}px`;
     res.textContent = ""; stage.classList.remove("drafting");
     ["#demo-draft", "#demo-toast"].forEach(id => $(id).classList.remove("in"));
     $("#demo-body").textContent = ""; $("#demo-send").textContent = "Open in Gmail";
@@ -136,6 +139,7 @@ async function demoLoop() {
       await sleep(500); if (!demoOn) break; $("#demo-send").textContent = "Sent ✓";
       await sleep(900); if (!demoOn) break; $("#demo-toast").classList.add("in");
     }
+    if (!wide()) break;  // phones: play it once and leave the example showing
     await sleep(3200); if (!demoOn) break;
     input.value = "";
   }
@@ -145,6 +149,7 @@ function stopDemo() {
   if (!demoVisible) return;
   demoVisible = false;
   demoOn = false;
+  $("#results").style.minHeight = "";  // their own results take the space they need
   $("#stage").classList.remove("drafting");
   ["#demo-draft", "#demo-toast"].forEach(id => $(id).classList.remove("in"));
   $("#results").textContent = "";
