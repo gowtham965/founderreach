@@ -64,11 +64,13 @@ app = FastAPI(title=get_settings().app_name, lifespan=lifespan)
 # never embeddable in another site's frame.
 _CSP = "; ".join([
     "default-src 'self'",
-    "script-src 'self' https://static.cloudflareinsights.com",  # Cloudflare Web Analytics (no cookies)
+    # Cloudflare Web Analytics (no cookies); Razorpay's checkout popup script
+    "script-src 'self' https://static.cloudflareinsights.com https://checkout.razorpay.com https://cdn.razorpay.com",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",  # inline style attributes are used
     "font-src 'self' https://fonts.gstatic.com",
-    "img-src 'self' data:",
-    "connect-src 'self' https://cloudflareinsights.com",
+    "img-src 'self' data: https://cdn.razorpay.com",
+    "connect-src 'self' https://cloudflareinsights.com https://api.razorpay.com https://lumberjack.razorpay.com",
+    "frame-src https://api.razorpay.com https://checkout.razorpay.com",  # the popup runs in Razorpay's iframe
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",
@@ -479,9 +481,9 @@ class PayIn(BaseModel):
 
 @app.post("/api/pay")
 def api_pay(body: PayIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
-    """Start a payment; the browser goes to the gateway's payment page."""
+    """Start a payment: Razorpay gets checkout options for its popup, PhonePe a page to send the browser to."""
     try:
-        return {"redirect_url": billing.create_order(db, user, body.plan)}
+        return billing.create_order(db, user, body.plan)
     except billing.PaymentError as exc:
         raise HTTPException(400 if not billing.payments_on() or body.plan not in billing.PLANS else 503, str(exc)) from exc
     except httpx.HTTPError as exc:
@@ -529,20 +531,45 @@ async def pay_webhook(request: Request, db: Session = Depends(get_db)):
     return {"ok": True}
 
 
+class RazorpayPaidIn(BaseModel):
+    razorpay_order_id: str = Field(min_length=1, max_length=64)
+    razorpay_payment_id: str = Field(min_length=1, max_length=64)
+    razorpay_signature: str = Field(min_length=1, max_length=128)
+
+
+@app.post("/api/pay/verify")
+def api_pay_verify(body: RazorpayPaidIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Razorpay checkout's success handler posts here. A bad signature changes nothing (400). A good one is still
+    only a claim: the pass turns on when Razorpay's API says the order is paid in full."""
+    pay = db.scalar(select(Payment).where(Payment.gateway_ref == body.razorpay_order_id, Payment.user_id == user.id,
+                                          Payment.provider == "razorpay"))
+    if pay is None:
+        raise HTTPException(404, "No such payment")
+    if not billing.razorpay_signature_ok(body.razorpay_order_id, body.razorpay_payment_id, body.razorpay_signature):
+        logging.getLogger(__name__).warning("bad Razorpay signature for %s", pay.merchant_order_id)
+        raise HTTPException(400, "We couldn't verify that payment. If money left your account, write to us from the Contact page.")
+    try:
+        pay = billing.refresh(db, pay)
+    except (billing.PaymentError, httpx.HTTPError):
+        logging.getLogger(__name__).exception("payment status check failed")
+    db.refresh(user)
+    return {"state": pay.state, "order": pay.merchant_order_id, "billing": billing.summary(user)}
+
+
 @app.post("/api/pay/razorpay-webhook", include_in_schema=False)
 async def razorpay_webhook(request: Request, db: Session = Depends(get_db)):
-    """Razorpay's server-to-server notice (payment_link.paid and friends). Signed over the raw body; the
-    status itself is then fetched from Razorpay's API."""
+    """Razorpay's server-to-server notice (order.paid, payment.captured, payment.failed). Signed over the raw body;
+    the status itself is then fetched from Razorpay's API, so a pass turns on even if the browser tab was closed."""
     body = await request.body()
     if not billing.razorpay_webhook_ok(body, request.headers.get("x-razorpay-signature")):
         raise HTTPException(401, "bad signature")
     try:
-        data = json.loads(body)
-        link = data["payload"]["payment_link"]["entity"]
-        order_id = str(link.get("reference_id") or "")
-    except (ValueError, KeyError, TypeError):
-        return {"ok": True}  # other events (payments, refunds) carry no link: nothing to do
-    pay = db.scalar(select(Payment).where(Payment.merchant_order_id == order_id)) if billing.ORDER_ID_RE.match(order_id) else None
+        payload = json.loads(body).get("payload") or {}
+        order_id = ((payload.get("order") or {}).get("entity") or {}).get("id") \
+            or ((payload.get("payment") or {}).get("entity") or {}).get("order_id")
+    except (ValueError, AttributeError):
+        return {"ok": True}
+    pay = db.scalar(select(Payment).where(Payment.gateway_ref == str(order_id), Payment.provider == "razorpay")) if order_id else None
     if pay is not None:
         try:
             billing.refresh(db, pay)

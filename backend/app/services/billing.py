@@ -181,8 +181,9 @@ def _auth_header() -> str:
         return f"O-Bearer {_token['value']}"
 
 
-def create_order(db: Session, user: User, plan: str) -> str:
-    """Make an order with the active gateway and return the payment page to send the user to."""
+def create_order(db: Session, user: User, plan: str) -> dict:
+    """Make an order with the active gateway. Returns {"redirect_url"} (PhonePe: send the browser there) or
+    {"checkout"} (Razorpay: options for the in-page checkout popup; the key id is public, the secret never leaves)."""
     if not payments_on():
         raise PaymentError("Payments aren't switched on yet.")
     if plan not in PLANS:
@@ -195,14 +196,14 @@ def create_order(db: Session, user: User, plan: str) -> str:
     db.add(pay)
     db.commit()
     try:
-        url = (_razorpay_create if provider == "razorpay" else _phonepe_create)(pay, user)
+        out = _razorpay_create(pay, user) if provider == "razorpay" else {"redirect_url": _phonepe_create(pay, user)}
     except PaymentError:
         pay.state = "FAILED"
         db.commit()
         raise
     pay.state = "PENDING"
     db.commit()
-    return url
+    return out
 
 
 def refresh(db: Session, pay: Payment) -> Payment:
@@ -257,9 +258,9 @@ def _phonepe_status(pay: Payment) -> tuple[str, int | None] | None:
     return (state if state in ("PENDING", "COMPLETED", "FAILED") else pay.state), data.get("amount")
 
 
-# ---------------------------------------------------------------- Razorpay (Payment Links)
+# ---------------------------------------------------------------- Razorpay (Standard Checkout)
 _RZP = "https://api.razorpay.com/v1"
-_RZP_STATES = {"created": "PENDING", "partially_paid": "PENDING", "paid": "COMPLETED", "expired": "FAILED", "cancelled": "FAILED"}
+_RZP_STATES = {"created": "PENDING", "attempted": "PENDING", "paid": "COMPLETED"}  # an order never "fails"
 
 
 def _rzp_auth() -> tuple[str, str]:
@@ -267,38 +268,44 @@ def _rzp_auth() -> tuple[str, str]:
     return s.razorpay_key_id, s.razorpay_key_secret
 
 
-def _razorpay_create(pay: Payment, user: User) -> str:
-    body = {
-        "amount": pay.amount_paise,
-        "currency": "INR",
-        "accept_partial": False,
-        "reference_id": pay.merchant_order_id,  # unique, up to 40 characters
-        "description": f"FounderReach {PLANS[pay.plan][2]}",
-        "customer": {"name": (user.name or "")[:100], "email": user.email},
-        "notify": {"sms": False, "email": False},
-        "reminder_enable": False,
-        "expire_by": int(time.time()) + 30 * 60,
-        "callback_url": _return_url(pay),
-        "callback_method": "get",
-    }
-    r = httpx.post(f"{_RZP}/payment_links", json=body, auth=_rzp_auth(), timeout=20)
+def _razorpay_create(pay: Payment, user: User) -> dict:
+    body = {"amount": pay.amount_paise, "currency": "INR", "receipt": pay.merchant_order_id,  # receipt: up to 40 chars
+            "notes": {"user_id": str(user.id), "plan": pay.plan}}
+    r = httpx.post(f"{_RZP}/orders", json=body, auth=_rzp_auth(), timeout=20)
     data = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
-    if r.status_code != 200 or not data.get("short_url"):
-        log.error("Razorpay link failed for %s: %s %s", pay.merchant_order_id, r.status_code, r.text[:300])
-        raise PaymentError("Couldn't start the payment. Please try again in a few minutes.")
+    if r.status_code != 200 or not data.get("id"):
+        log.error("Razorpay order failed for %s: %s %s", pay.merchant_order_id, r.status_code, r.text[:300])
+        raise PaymentError("Payments are unavailable right now. Please try again in a few minutes." if r.status_code == 401
+                           else "Couldn't start the payment. Please try again in a few minutes.")
     pay.gateway_ref = data["id"]
-    return data["short_url"]
+    base = get_settings().base_url.rstrip("/")
+    return {"checkout": {
+        "key": get_settings().razorpay_key_id, "order_id": data["id"], "amount": pay.amount_paise, "currency": "INR",
+        "name": "FounderReach", "description": PLANS[pay.plan][2], "image": f"{base}/static/brand/icon-192.png",
+        "prefill": {"name": user.name or "", "email": user.email}, "notes": {"order": pay.merchant_order_id},
+        "theme": {"color": "#5b6cff"},
+    }, "order": pay.merchant_order_id}
 
 
 def _razorpay_status(pay: Payment) -> tuple[str, int | None] | None:
+    """The order is "paid" once a payment for it is captured (auto-capture on); amount_paid says how much."""
     if not pay.gateway_ref:
         return None
-    r = httpx.get(f"{_RZP}/payment_links/{pay.gateway_ref}", auth=_rzp_auth(), timeout=20)
+    r = httpx.get(f"{_RZP}/orders/{pay.gateway_ref}", auth=_rzp_auth(), timeout=20)
     if r.status_code != 200:
         log.warning("Razorpay status failed for %s: %s %s", pay.merchant_order_id, r.status_code, r.text[:300])
         return None
     data = r.json()
     return _RZP_STATES.get(data.get("status"), pay.state), data.get("amount_paid")
+
+
+def razorpay_signature_ok(order_id: str, payment_id: str, signature: str) -> bool:
+    """Checkout's success handler: signature = HMAC-SHA256(key secret, order_id + "|" + payment_id), hex."""
+    secret = get_settings().razorpay_key_secret
+    if not (secret and order_id and payment_id and signature):
+        return False
+    expected = hmac.new(secret.encode(), f"{order_id}|{payment_id}".encode(), hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, signature.strip())
 
 
 def razorpay_webhook_ok(body: bytes, signature: str | None) -> bool:

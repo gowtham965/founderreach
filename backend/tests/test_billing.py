@@ -1,6 +1,7 @@
 """Trial, passes and PhonePe payments, against a fake PhonePe."""
 import hashlib
 import os
+import secrets
 import tempfile
 from datetime import timedelta
 
@@ -252,15 +253,16 @@ def test_prices_come_from_one_place():
 # ---------------------------------------------------------------- Razorpay
 class FakeRazorpay:
     def __init__(self):
-        self.status, self.paid, self.calls = "created", 0, []
+        self.status, self.paid, self.calls, self.last = "created", 0, [], ""
 
     def post(self, url, **kw):
         self.calls.append(("POST", url, kw))
-        return httpx.Response(200, json={"id": "plink_TEST1", "short_url": "https://rzp.io/rzp/abc", "status": "created"})
+        self.last = f"order_T{secrets.token_hex(4)}"  # real order ids are unique
+        return httpx.Response(200, json={"id": self.last, "status": "created", "amount": kw["json"]["amount"]})
 
     def get(self, url, **kw):
         self.calls.append(("GET", url, kw))
-        return httpx.Response(200, json={"id": "plink_TEST1", "status": self.status, "amount_paid": self.paid})
+        return httpx.Response(200, json={"id": url.rsplit("/", 1)[-1], "status": self.status, "amount_paid": self.paid})
 
 
 @pytest.fixture
@@ -277,44 +279,53 @@ def razorpay(monkeypatch):
     return fake
 
 
-def test_razorpay_link_then_return_turns_on_a_pass(client, razorpay):
+def rzp_sig(order_id, payment_id, secret=b"keysecret"):
+    import hmac as _hmac
+    return _hmac.new(secret, f"{order_id}|{payment_id}".encode(), hashlib.sha256).hexdigest()
+
+
+def test_razorpay_checkout_then_verify_turns_on_a_pass(client, razorpay):
     h, uid = signup(client, "rzp@gmail.com")
     assert client.get("/api/me", headers=h).json()["billing"]["gateway"] == "Razorpay"
     r = client.post("/api/pay", headers=h, json={"plan": "month"})
-    assert r.status_code == 200 and r.json()["redirect_url"] == "https://rzp.io/rzp/abc"
+    assert r.status_code == 200
+    co = r.json()["checkout"]
+    oid = razorpay.last
+    assert co["key"] == "rzp_test_key" and co["order_id"] == oid and co["amount"] == 69900
+    assert "keysecret" not in r.text  # the secret never reaches the browser
     _, url, kw = razorpay.calls[0]
-    assert url.endswith("/v1/payment_links") and kw["auth"] == ("rzp_test_key", "keysecret")
-    body = kw["json"]
+    assert url.endswith("/v1/orders") and kw["auth"] == ("rzp_test_key", "keysecret")
     with SessionLocal() as db:
         pay = db.query(Payment).filter_by(user_id=uid).one()
-        assert (pay.provider, pay.gateway_ref, pay.state) == ("razorpay", "plink_TEST1", "PENDING")
-    assert body["amount"] == 69900 and body["reference_id"] == pay.merchant_order_id and len(body["reference_id"]) <= 40
-    assert body["callback_url"].endswith(f"/pay/return?o={pay.merchant_order_id}") and body["callback_method"] == "get"
-    assert body["accept_partial"] is False and body["notify"] == {"sms": False, "email": False}
+    assert (pay.provider, pay.gateway_ref) == ("razorpay", oid)
+    assert kw["json"] == {"amount": 69900, "currency": "INR", "receipt": pay.merchant_order_id,
+                          "notes": {"user_id": str(uid), "plan": "month"}}
 
-    order = pay.merchant_order_id
-    back = client.get(f"/pay/return?o={order}&razorpay_payment_id=pay_1&razorpay_payment_link_status=paid", follow_redirects=False)
-    assert back.headers["location"] == f"/?paid={order}"
-    assert client.post(f"/api/pay/{order}/check", headers=h).json()["state"] == "PENDING"
+    good = {"razorpay_order_id": oid, "razorpay_payment_id": "pay_1", "razorpay_signature": rzp_sig(oid, "pay_1")}
+    bad = {**good, "razorpay_signature": rzp_sig(oid, "pay_OTHER")}
     razorpay.status, razorpay.paid = "paid", 69900
-    done = client.post(f"/api/pay/{order}/check", headers=h).json()
+    assert client.post("/api/pay/verify", headers=h, json=bad).status_code == 400  # forged: nothing changes
+    assert user(uid).pass_until is None
+    assert client.post("/api/pay/verify", headers=h, json={"razorpay_order_id": oid}).status_code == 422
+    done = client.post("/api/pay/verify", headers=h, json=good).json()
     assert done["state"] == "COMPLETED" and done["billing"]["pass_until"]
     left = aware(user(uid).pass_until) - now()
     assert timedelta(days=29, hours=23) < left <= timedelta(days=30)
+    other, _ = signup(client, "rzp-other@gmail.com")
+    assert client.post("/api/pay/verify", headers=other, json=good).status_code == 404  # not their order
 
 
-def test_razorpay_partial_or_short_payment_never_turns_on_a_pass(client, razorpay):
-    h, uid = signup(client, "rzp-short@gmail.com")
+def test_razorpay_good_signature_but_not_captured_waits(client, razorpay):
+    h, uid = signup(client, "rzp-wait@gmail.com")
     client.post("/api/pay", headers=h, json={"plan": "week"})
-    with SessionLocal() as db:
-        order = db.query(Payment).filter_by(user_id=uid).one().merchant_order_id
-    razorpay.status, razorpay.paid = "partially_paid", 10000
-    assert client.post(f"/api/pay/{order}/check", headers=h).json()["state"] == "PENDING"
-    razorpay.status = "paid"  # says paid, but not the full amount
-    client.post(f"/api/pay/{order}/check", headers=h)
-    assert user(uid).pass_until is None
-    razorpay.status, razorpay.paid = "expired", 0
-    assert client.post(f"/api/pay/{order}/check", headers=h).json()["state"] == "FAILED"
+    razorpay.status, razorpay.paid, oid = "attempted", 0, razorpay.last
+    r = client.post("/api/pay/verify", headers=h, json={"razorpay_order_id": oid, "razorpay_payment_id": "pay_2",
+                                                        "razorpay_signature": rzp_sig(oid, "pay_2")}).json()
+    assert r["state"] == "PENDING" and user(uid).pass_until is None
+    razorpay.status, razorpay.paid = "paid", 10000  # paid, but not the full amount
+    assert client.post(f"/api/pay/{r['order']}/check", headers=h).json()["billing"]["pass_until"] is None
+    razorpay.paid = 29900
+    assert client.post(f"/api/pay/{r['order']}/check", headers=h).json()["billing"]["pass_until"]
 
 
 def test_razorpay_webhook_signature_and_status_check(client, razorpay):
@@ -322,22 +333,28 @@ def test_razorpay_webhook_signature_and_status_check(client, razorpay):
     import json as _json
     h, uid = signup(client, "rzp-hook@gmail.com")
     client.post("/api/pay", headers=h, json={"plan": "week"})
-    with SessionLocal() as db:
-        order = db.query(Payment).filter_by(user_id=uid).one().merchant_order_id
-    raw = _json.dumps({"event": "payment_link.paid", "payload": {"payment_link": {"entity": {
-        "id": "plink_TEST1", "reference_id": order, "status": "paid"}}}}).encode()
+    oid = razorpay.last
+    raw = _json.dumps({"event": "order.paid", "payload": {"order": {"entity": {"id": oid, "status": "paid"}}}}).encode()
     sig = _hmac.new(b"hooksecret", raw, hashlib.sha256).hexdigest()
     url = "/api/pay/razorpay-webhook"
     assert client.post(url, content=raw).status_code == 401
     assert client.post(url, content=raw, headers={"X-Razorpay-Signature": "0" * 64}).status_code == 401
-    # signed, says paid, but Razorpay's API still says created: no pass
+    # signed and says paid, but Razorpay's API still says created: no pass
     assert client.post(url, content=raw, headers={"X-Razorpay-Signature": sig}).status_code == 200
     assert user(uid).pass_until is None
     razorpay.status, razorpay.paid = "paid", 29900
-    assert client.post(url, content=raw, headers={"X-Razorpay-Signature": sig}).status_code == 200
+    captured = _json.dumps({"event": "payment.captured", "payload": {"payment": {"entity": {"id": "pay_9", "order_id": oid}}}}).encode()
+    assert client.post(url, content=captured, headers={"X-Razorpay-Signature": _hmac.new(b"hooksecret", captured, hashlib.sha256).hexdigest()}).status_code == 200
     assert user(uid).pass_until is not None
     other = b'{"event": "refund.processed", "payload": {}}'
     assert client.post(url, content=other, headers={"X-Razorpay-Signature": _hmac.new(b"hooksecret", other, hashlib.sha256).hexdigest()}).status_code == 200
+
+
+def test_razorpay_bad_keys_are_a_friendly_error(client, razorpay, monkeypatch):
+    monkeypatch.setattr(billing.httpx, "post", lambda url, **kw: httpx.Response(401, json={"error": {"description": "Authentication failed"}}))
+    h, _ = signup(client, "rzp-badkey@gmail.com")
+    r = client.post("/api/pay", headers=h, json={"plan": "week"})
+    assert r.status_code == 503 and "unavailable" in r.json()["detail"]
 
 
 def test_payments_follow_the_chosen_gateways_keys(monkeypatch):

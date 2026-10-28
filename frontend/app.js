@@ -657,15 +657,17 @@ function openPlans(why) {
     buy.addEventListener("click", async () => {
       grid.querySelectorAll("button").forEach(b => b.disabled = true);
       buy.textContent = `Opening ${billing.gateway}…`;
-      try {
-        const { redirect_url } = await api("/api/pay", { method: "POST", json: { plan: p.id } });
-        if (!/^https:\/\/([^/]*\.)?(phonepe\.com|razorpay\.com|rzp\.io)\//.test(redirect_url)) throw new Error("Unexpected payment page. Please try again.");
-        location.assign(redirect_url);
-      } catch (err) {
-        $("#plans-error").textContent = err.message;
+      const reset = msg => {
+        $("#plans-error").textContent = msg || "";
         grid.querySelectorAll("button").forEach(b => b.disabled = false);
         buy.textContent = payLabel;
-      }
+      };
+      try {
+        const r = await api("/api/pay", { method: "POST", json: { plan: p.id } });
+        if (r.checkout) return await razorpayCheckout(r, reset);  // Razorpay: in-page popup
+        if (!/^https:\/\/([^/]*\.)?phonepe\.com\//.test(r.redirect_url || "")) throw new Error("Unexpected payment page. Please try again.");
+        location.assign(r.redirect_url);  // PhonePe: its own page, then back to /pay/return
+      } catch (err) { reset(err.message); }
     });
     card.append(el("h3", "", p.label), price, el("p", "plan-per", `about ₹${Math.round(p.price / p.days)} a day`), buy);
     grid.appendChild(card);
@@ -677,6 +679,43 @@ $("#plan-pill").addEventListener("click", () => openPlans(billing?.pass_until
   ? `Your pass runs till ${fmtDate(billing.pass_until)}. Buying another adds to it.` : ""));
 $("#plans-close").addEventListener("click", () => $("#plans").close());
 $("#plans").addEventListener("click", e => { if (e.target.id === "plans") $("#plans").close(); });  // tap outside
+
+// Razorpay Standard Checkout: its script loads only when someone pays. The key id comes from the server
+// (it's public); the secret never reaches the browser.
+function loadRazorpay() {
+  if (window.Razorpay) return Promise.resolve();
+  return new Promise((ok, fail) => {
+    const sc = document.createElement("script");
+    sc.src = "https://checkout.razorpay.com/v1/checkout.js";
+    sc.onload = ok; sc.onerror = () => fail(new Error("Couldn't load the payment window. Check your connection and try again."));
+    document.head.appendChild(sc);
+  });
+}
+async function razorpayCheckout({ checkout, order }, reset) {
+  await loadRazorpay();
+  let settled = false;
+  const rzp = new window.Razorpay({
+    ...checkout,
+    handler: async resp => {  // paid: the server checks the signature, then asks Razorpay
+      settled = true;
+      banner("Confirming your payment…");
+      try {
+        const v = await api("/api/pay/verify", { method: "POST", json: {
+          razorpay_order_id: resp.razorpay_order_id, razorpay_payment_id: resp.razorpay_payment_id,
+          razorpay_signature: resp.razorpay_signature } });
+        renderBilling(v.billing);
+        if (v.state === "COMPLETED" && v.billing.pass_until) banner(`Payment received ✓ Your pass is active till ${fmtDate(v.billing.pass_until)}. Happy hunting!`, "ok");
+        else checkPayment(order);  // captured a moment later: keep checking
+      } catch (err) { banner(err.message, "warn"); }
+    },
+    modal: { ondismiss: () => { if (!settled) { openPlans(); reset("Payment cancelled. You weren't charged."); } } },
+  });
+  rzp.on("payment.failed", r => {  // the popup stays open so they can retry with another method
+    $("#plans-error").textContent = r?.error?.description || "The payment failed.";
+  });
+  $("#plans").close();  // our dialog sits on top of everything; Razorpay's popup must be visible
+  rzp.open();
+}
 
 // Back from the gateway: /pay/return sends people to /?paid=<order>. Ask our server (which asks the gateway) what happened.
 let paidOrder = null;
