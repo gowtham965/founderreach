@@ -24,7 +24,7 @@ from app.auth import create_token, current_user, decode_payload, decode_token, h
 from app.config import get_settings
 from app.db import SessionLocal, get_db, init_db
 from app.models import ChatMessage, Match, Payment, Startup, User
-from app.services import billing, discovery, email_check, google_login, mailer, matching, ops, outreach, pow as pow_svc, profile as profile_svc
+from app.services import admin as admin_svc, alerts, backup, billing, discovery, email_check, google_login, mailer, matching, ops, outreach, pow as pow_svc, profile as profile_svc
 from app.services import wa_bot, whatsapp
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -129,6 +129,7 @@ def signup(body: SignupIn, request: Request, background: BackgroundTasks, db: Se
     db.add(user)
     db.commit()
     _count_signup(client_ip(request))
+    alerts.signup(user.email, "email")
     _welcome(db, user)
     _send_confirmation(db, user, background)
     return {"token": session_token(user)}
@@ -607,6 +608,41 @@ def run_discovery_now(user: User = Depends(current_user)):
         raise HTTPException(403, "Only the FounderReach admin can refresh the startup pool")
     threading.Thread(target=scheduler.job_discovery, daemon=True).start()  # recorded like the 7am run
     return {"ok": True, "message": "Discovery started; new startups appear in a minute or two."}
+
+
+@app.get("/api/admin/overview")
+def admin_overview(q: str = "", user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Everything the Admin tab shows. Admins only."""
+    if not is_admin(user):
+        raise HTTPException(403, "Admins only")
+    return admin_svc.overview(db, q[:100])
+
+
+@app.post("/api/admin/test-alert")
+def admin_test_alert(user: User = Depends(current_user)):
+    """Send a test notification to the admin's phone (ntfy)."""
+    if not is_admin(user):
+        raise HTTPException(403, "Admins only")
+    if not alerts.send("FounderReach test alert", "Alerts work. You'll get one for each sign-up and payment.", tags="bell", wait=True):
+        raise HTTPException(400, "Alerts aren't set up: add NTFY_TOPIC in Render")
+    return {"ok": True}
+
+
+@app.get("/api/admin/backup")
+def download_backup(user: User = Depends(current_user)):
+    """A fresh database backup, downloaded: the copy that leaves the server. Admins only."""
+    if not is_admin(user):
+        raise HTTPException(403, "Only the FounderReach admin can download backups")
+    if backup.db_path() is None:
+        raise HTTPException(400, "Backups here are for SQLite databases")
+    try:
+        made = backup.run()
+    except Exception as exc:
+        logging.getLogger(__name__).exception("backup for download failed")
+        raise HTTPException(500, "Couldn't make a backup right now. Check the logs.") from exc
+    scheduler.record("backup", True, {**made, "by": "download"})
+    return FileResponse(backup.backup_dir() / made["file"], media_type="application/gzip", filename=made["file"],
+                        headers={"Cache-Control": "no-store"})
 
 
 @app.post("/api/admin/ops-report")

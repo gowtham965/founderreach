@@ -48,7 +48,15 @@ def report_alerts():
 
 def test_quiet_and_healthy():
     runs({"fetch_news": 2, "fetch_startup_map": 1}, {"fetch_news": 1, "fetch_startup_map": 0}, {"fetch_news": 3, "fetch_startup_map": 0})
+    with SessionLocal() as db:
+        db.add(JobRun(name="backup", ok=True, detail={"file": "x"}, started_at=now() - timedelta(hours=5)))
+        db.commit()
     assert report_alerts() == []
+
+
+def test_missing_backup_is_an_alert():
+    runs({"fetch_news": 1})
+    assert any("No successful database backup" in a for a in report_alerts())
 
 
 def test_source_gone_quiet_and_failed_job():

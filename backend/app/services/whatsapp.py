@@ -70,6 +70,8 @@ def find_or_create_user(db: Session, phone: str, name: str = "") -> tuple[User, 
                 email_verified_at=now())  # WhatsApp has proved they own the number
     db.add(user)
     db.commit()
+    from app.services import alerts
+    alerts.send("New sign-up", f"Someone joined on WhatsApp (…{phone[-4:]}).", tags="tada")
     return user, True
 
 

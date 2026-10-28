@@ -79,4 +79,6 @@ def sign_in(db: Session, identity: dict) -> tuple[User, bool]:
                 email_verified_at=now())
     db.add(user)
     db.commit()
+    from app.services import alerts
+    alerts.signup(email, "Google")
     return user, True

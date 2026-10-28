@@ -94,6 +94,11 @@ def alerts(data: dict) -> list[str]:
         for source in last3[-1]:
             if all(d.get(source) == 0 for d in last3):
                 out.append(f"Source '{source}' added 0 startups in the last 3 refreshes.")
+    from app.services import backup
+    if backup.db_path() is not None:
+        good = [r for r in runs if r.name == "backup" and r.ok]
+        if not good or aware(good[-1].started_at) < t - timedelta(hours=26):
+            out.append("No successful database backup in the last day. Use Pipeline → Download backup, and check the logs.")
     if data["payments"]["stuck_pending"]:
         out.append(f"{len(data['payments']['stuck_pending'])} payment(s) pending for over an hour: "
                    + ", ".join(data["payments"]["stuck_pending"][:5]))

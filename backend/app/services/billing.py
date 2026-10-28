@@ -145,6 +145,7 @@ def summary(user: User) -> dict:
     end = _trial_end(user)
     return {
         "payments": payments_on(),
+        "admin": is_admin(user),  # never limited or charged
         "gateway": "PhonePe" if _provider() == "phonepe" else "Razorpay",
         "pass_until": aware(user.pass_until).isoformat() if _pass_active(user, at) else None,
         "trial_days": s.trial_days,
@@ -336,6 +337,8 @@ def _apply(db: Session, pay: Payment) -> None:
     db.commit()
     db.refresh(pay)
     log.info("pass %s for user %s until %s (order %s)", pay.plan, user.id, user.pass_until, pay.merchant_order_id)
+    from app.services import alerts
+    alerts.payment(user.email, PLANS[pay.plan][2], pay.amount_paise // 100)
 
 
 def phonepe_webhook_ok(authorization: str | None) -> bool:

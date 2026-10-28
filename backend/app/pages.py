@@ -153,6 +153,8 @@ We don't sell your data.</p>
   <li><strong>Google</strong> (if you sign in with Google), <strong>Meta</strong> (if you use WhatsApp), and our email provider for
       account emails such as confirmation links.</li>
   <li><strong>Our payment partner</strong>, when you buy a pass.</li>
+  <li><strong>ntfy</strong>, a notification service that tells us about new sign-ups and payments, with your email
+      partly hidden.</li>
 </ul>
 
 <h2>Founders and startups</h2>

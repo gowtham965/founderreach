@@ -4,6 +4,7 @@
   daily  {digest_hour}:30 IST    matching: new picks for every ready user + a chat notification
   hourly                         follow-up reminders (writes the draft; the user sends it)
   daily  {ops_report_hour}:00 IST    ops report to the admins (app/services/ops.py)
+  daily  {backup_hour}:00 IST        database backup, last 7 kept (app/services/backup.py)
 For multiple server instances, move these to a single worker process or a cron service.
 """
 import logging
@@ -15,14 +16,16 @@ from sqlalchemy import select
 from app.config import get_settings
 from app.db import SessionLocal
 from app.models import JobRun, User
-from app.services import billing, discovery, matching, ops, outreach
+from app.services import alerts, backup, billing, discovery, matching, ops, outreach
 
 log = logging.getLogger(__name__)
 _scheduler: BackgroundScheduler | None = None
 
 
 def record(name: str, ok: bool, detail: dict | None = None) -> None:
-    """Log a job run for the ops report. Bookkeeping never breaks the job."""
+    """Log a job run for the ops report (and alert the admin's phone when it failed). Never breaks the job."""
+    if not ok:
+        alerts.problem(f"Background job '{name}' failed: {str(detail)[:200]}")
     try:
         with SessionLocal() as db:
             db.add(JobRun(name=name, ok=ok, detail=detail))
@@ -89,6 +92,16 @@ def job_followups():
         raise
 
 
+def job_backup():
+    if backup.db_path() is None:  # not SQLite: the database provider backs it up
+        return
+    try:
+        record("backup", True, backup.run())
+    except Exception as exc:
+        log.exception("backup failed")
+        record("backup", False, {"error": str(exc)[:200]})
+
+
 def job_ops_report():
     try:
         with SessionLocal() as db:
@@ -107,6 +120,7 @@ def start():
     _scheduler.add_job(job_daily_matches, "cron", hour=s.digest_hour_ist, minute=30, id="matches")
     _scheduler.add_job(job_followups, "interval", hours=1, id="followups")
     _scheduler.add_job(job_ops_report, "cron", hour=s.ops_report_hour_ist, minute=0, id="ops_report")
+    _scheduler.add_job(job_backup, "cron", hour=s.backup_hour_ist, minute=0, id="backup")
     _scheduler.start()
     log.info("scheduler started")
 

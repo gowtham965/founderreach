@@ -123,6 +123,11 @@ class Settings(BaseSettings):
     scheduler_enabled: bool = True
     digest_hour_ist: int = 8
     ops_report_hour_ist: int = 9  # the admins' daily ops report
+    backup_hour_ist: int = 3  # nightly database backup (SQLite)
+    backup_keep_days: int = 7
+    # instant admin alerts (app/services/alerts.py): a long random topic name, subscribed to in the ntfy app
+    ntfy_topic: str = ""
+    ntfy_server: str = "https://ntfy.sh"
 
 
 @lru_cache

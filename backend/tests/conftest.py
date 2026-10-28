@@ -7,6 +7,7 @@ os.environ.setdefault("FOCUS_CITIES", "")
 os.environ.setdefault("FOCUS_STAGES", "")
 os.environ.setdefault("SMTP_USER", "")  # never send real email from tests, whatever .env says
 os.environ.setdefault("SMTP_PASSWORD", "")
+os.environ["NTFY_TOPIC"] = ""  # never send real phone alerts from tests, whatever .env says
 
 import pytest
 

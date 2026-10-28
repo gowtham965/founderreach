@@ -75,7 +75,8 @@
       </div>
     </section>
 
-    <div class="ticker" id="ticker" hidden><div class="track" id="ticker-track"></div></div>
+    <!-- always on the page (startups fill in when loaded), so its arrival never pushes the page down -->
+    <div class="ticker" id="ticker"><div class="track" id="ticker-track"><span class="item live">● Fresh in Namma Bengaluru</span><span class="item kn">ನಮ್ಮ ಬೆಂಗಳೂರು</span></div></div>
 
     <section class="sources reveal" aria-labelledby="sources-h">
       <p class="label" id="sources-h">Where our Bangalore startups come from</p>
@@ -217,6 +218,7 @@
         <nav class="tabs" role="tablist">
           <button role="tab" data-tab="chat" aria-selected="true">Chat</button>
           <button role="tab" data-tab="pipeline" aria-selected="false">Pipeline</button>
+          <button role="tab" data-tab="admin" aria-selected="false" id="admin-tab" hidden>Admin</button>
         </nav>
         <button type="button" class="plan-pill" id="plan-pill" hidden></button>
         <span class="me" id="me-avatar" aria-hidden="true"></span>
@@ -245,12 +247,28 @@
     <section id="pipeline" class="pipeline" hidden>
       <p class="stats" id="stats"></p>
       <div class="pipe-actions">
-        <button class="btn ghost" id="discover-btn" hidden>Refresh startup pool</button>
-        <button class="btn ghost" id="ops-btn" hidden>Ops report</button>
         <button class="btn ghost danger" id="logout-btn">Sign out</button>
         <button class="btn ghost danger" id="delete-btn">Delete my account</button>
       </div>
       <div id="pipe-list"></div>
+    </section>
+
+    <section id="admin" class="admin" hidden>
+      <div class="admin-actions">
+        <button class="btn ghost" id="discover-btn">Refresh startup pool</button>
+        <button class="btn ghost" id="ops-btn">Ops report</button>
+        <button class="btn ghost" id="backup-btn">Download backup</button>
+        <button class="btn ghost" id="alert-btn">Send test alert</button>
+        <a class="btn ghost" href="https://dash.cloudflare.com/?to=/:account/web-analytics" target="_blank" rel="noopener">Website traffic ↗</a>
+      </div>
+      <div class="kpis" id="kpis"></div>
+      <div class="panel-a"><h3>Last 30 days</h3><div id="chart"></div>
+        <p class="legend"><span class="sw su"></span>Sign-ups <span class="sw ac"></span>Active (sent a chat message)</p></div>
+      <div class="panel-a"><h3>Where people drop off</h3><div id="funnel"></div></div>
+      <div class="panel-a"><div class="panel-head"><h3 id="users-h">Users</h3>
+        <input type="search" id="user-q" placeholder="Search email or name" aria-label="Search users"></div>
+        <div class="table-wrap"><table class="tbl" id="users-tbl"></table></div></div>
+      <div class="panel-a"><h3>Payments</h3><div class="table-wrap"><table class="tbl" id="pay-tbl"></table></div></div>
     </section>
   </div>
 
