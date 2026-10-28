@@ -24,7 +24,7 @@ from app.auth import create_token, current_user, decode_payload, decode_token, h
 from app.config import get_settings
 from app.db import SessionLocal, get_db, init_db
 from app.models import ChatMessage, Match, Payment, Startup, User
-from app.services import billing, discovery, email_check, google_login, mailer, matching, outreach, profile as profile_svc
+from app.services import billing, discovery, email_check, google_login, mailer, matching, ops, outreach, pow as pow_svc, profile as profile_svc
 from app.services import wa_bot, whatsapp
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -468,6 +468,26 @@ def api_skip(match_id: int, user: User = Depends(current_user), db: Session = De
     return matching.match_card(m)
 
 
+# proof of work: ideas → a starter → their link goes into the email
+class PowLinkIn(BaseModel):
+    link: str = Field(min_length=10, max_length=500)
+
+
+@app.post("/api/matches/{match_id}/pow")
+def api_pow_ideas(match_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    return matching.match_card(_act(lambda: pow_svc.suggest(db, user, match_id)))
+
+
+@app.post("/api/matches/{match_id}/pow/{index}")
+def api_pow_start(match_id: int, index: int, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    return matching.match_card(_act(lambda: pow_svc.start(db, user, match_id, index)))
+
+
+@app.post("/api/matches/{match_id}/pow-link")
+def api_pow_link(match_id: int, body: PowLinkIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    return matching.match_card(_act(lambda: pow_svc.attach(db, user, match_id, body.link)))
+
+
 @app.post("/api/matches/{match_id}/stop-followups")
 def api_stop(match_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)):
     o = _act(lambda: outreach.cancel_followups(db, user, match_id))
@@ -585,12 +605,19 @@ def run_discovery_now(user: User = Depends(current_user)):
     """Kick off a discovery run in the background. Admins only: each run can spend AI credits."""
     if not is_admin(user):
         raise HTTPException(403, "Only the FounderReach admin can refresh the startup pool")
-    def work():
-        with SessionLocal() as db:
-            discovery.run_discovery(db)
-
-    threading.Thread(target=work, daemon=True).start()
+    threading.Thread(target=scheduler.job_discovery, daemon=True).start()  # recorded like the 7am run
     return {"ok": True, "message": "Discovery started; new startups appear in a minute or two."}
+
+
+@app.post("/api/admin/ops-report")
+def ops_report_now(user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Today's ops report, posted to the admin's chat. Admins only."""
+    if not is_admin(user):
+        raise HTTPException(403, "Only the FounderReach admin can see the ops report")
+    report = ops.build(db)
+    db.add(ChatMessage(user_id=user.id, role="assistant", content=report))
+    db.commit()
+    return {"report": report}
 
 
 # ---------- WhatsApp (Meta Cloud API webhook) ----------

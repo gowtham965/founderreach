@@ -3,6 +3,7 @@
   daily  {digest_hour-1}:00 IST  discovery: refresh the startup pool
   daily  {digest_hour}:30 IST    matching: new picks for every ready user + a chat notification
   hourly                         follow-up reminders (writes the draft; the user sends it)
+  daily  {ops_report_hour}:00 IST    ops report to the admins (app/services/ops.py)
 For multiple server instances, move these to a single worker process or a cron service.
 """
 import logging
@@ -13,16 +14,32 @@ from sqlalchemy import select
 
 from app.config import get_settings
 from app.db import SessionLocal
-from app.models import User
-from app.services import billing, discovery, matching, outreach
+from app.models import JobRun, User
+from app.services import billing, discovery, matching, ops, outreach
 
 log = logging.getLogger(__name__)
 _scheduler: BackgroundScheduler | None = None
 
 
+def record(name: str, ok: bool, detail: dict | None = None) -> None:
+    """Log a job run for the ops report. Bookkeeping never breaks the job."""
+    try:
+        with SessionLocal() as db:
+            db.add(JobRun(name=name, ok=ok, detail=detail))
+            db.commit()
+    except Exception:
+        log.exception("could not record job run %s", name)
+
+
 def job_discovery():
-    with SessionLocal() as db:
-        log.info("discovery added %d startups", discovery.run_discovery(db))
+    stats: dict = {}
+    try:
+        with SessionLocal() as db:
+            log.info("discovery added %d startups", discovery.run_discovery(db, stats))
+        record("discovery", not any(str(v).startswith("failed") for v in stats.values()), stats)
+    except Exception as exc:
+        record("discovery", False, {**stats, "error": str(exc)[:200]})
+        raise
 
 
 def wants_daily_matches(user: User, now: datetime | None = None) -> bool:
@@ -39,6 +56,7 @@ def wants_daily_matches(user: User, now: datetime | None = None) -> bool:
 
 
 def job_daily_matches():
+    sent = failed = 0
     with SessionLocal() as db:
         for user in db.scalars(select(User)).all():
             try:
@@ -51,14 +69,32 @@ def job_daily_matches():
                 lines = [f"• #{m.id} {m.startup.name}: {m.startup.one_liner[:80]} ({m.reason})" for m in new[:5]]
                 outreach.notify(db, user.id, f"gm ☀️ {len(new)} new startups fit you today:\n" + "\n".join(lines)
                                 + "\n\nWant me to draft an email to any of them?")
+                sent += 1
+            except billing.PaywallError:
+                db.rollback()
             except Exception:
                 log.exception("daily matches failed for user %s", user.id)
+                failed += 1
                 db.rollback()
+    record("daily_matches", failed == 0, {"users_notified": sent, "failed": failed})
 
 
 def job_followups():
-    with SessionLocal() as db:
-        outreach.prepare_due_followups(db)
+    try:
+        with SessionLocal() as db:
+            n = outreach.prepare_due_followups(db)
+        record("followups", True, {"drafted": n})
+    except Exception as exc:
+        record("followups", False, {"error": str(exc)[:200]})
+        raise
+
+
+def job_ops_report():
+    try:
+        with SessionLocal() as db:
+            ops.deliver(db)
+    except Exception:
+        log.exception("ops report failed")
 
 
 def start():
@@ -70,6 +106,7 @@ def start():
     _scheduler.add_job(job_discovery, "cron", hour=max(s.digest_hour_ist - 1, 0), minute=0, id="discovery")
     _scheduler.add_job(job_daily_matches, "cron", hour=s.digest_hour_ist, minute=30, id="matches")
     _scheduler.add_job(job_followups, "interval", hours=1, id="followups")
+    _scheduler.add_job(job_ops_report, "cron", hour=s.ops_report_hour_ist, minute=0, id="ops_report")
     _scheduler.start()
     log.info("scheduler started")
 

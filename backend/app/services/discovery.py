@@ -319,14 +319,20 @@ def upsert_startups(db: Session, rows: list[dict]) -> int:
     return added
 
 
-def run_discovery(db: Session) -> int:
+def run_discovery(db: Session, stats: dict | None = None) -> int:
+    """Refresh the pool from every source. `stats`, if given, gets {source: added, or "failed: ..."}."""
     total = 0
     for source in SOURCES:
         try:
             rows = source()
             kept = [r for r in rows if in_focus(r.get("location"), r.get("stage"))]
-            total += upsert_startups(db, kept)
+            added = upsert_startups(db, kept)
+            total += added
+            if stats is not None:
+                stats[source.__name__] = added
             log.info("%s: %d rows, %d in focus", source.__name__, len(rows), len(kept))
         except Exception as exc:
+            if stats is not None:
+                stats[source.__name__] = f"failed: {str(exc)[:120]}"
             log.warning("discovery source %s failed: %s", source.__name__, exc)
     return total

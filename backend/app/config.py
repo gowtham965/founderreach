@@ -122,6 +122,7 @@ class Settings(BaseSettings):
     match_active_days: int = 7  # morning matches only for people who used the app this recently
     scheduler_enabled: bool = True
     digest_hour_ist: int = 8
+    ops_report_hour_ist: int = 9  # the admins' daily ops report
 
 
 @lru_cache

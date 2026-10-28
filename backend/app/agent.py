@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.llm import Tool, get_llm
 from app.models import ChatMessage, Match, User
-from app.services import billing, discovery, matching, outreach, profile as profile_svc, research as research_svc
+from app.services import billing, discovery, matching, outreach, pow as pow_svc, profile as profile_svc, research as research_svc
 
 log = logging.getLogger(__name__)
 
@@ -73,6 +73,9 @@ TOOLS = [
     }),
     Tool("research_startup", "Research a matched startup (its site and funding news): what it does, recent launches and "
          "news with sources, and specific openers for an email. Use when the user asks about a startup.",
+         {"type": "object", "properties": {"match_id": {"type": "integer"}}, "required": ["match_id"]}),
+    Tool("proof_of_work", "Suggest 3 small things the user could make for a matched startup in 1-3 hours (a teardown, "
+         "a bug list, a mini demo...) to stand out. Use when they want to impress a founder or ask what to send.",
          {"type": "object", "properties": {"match_id": {"type": "integer"}}, "required": ["match_id"]}),
     Tool("find_matches", "Find new startups that fit the user now (from the discovered pool).", {"type": "object", "properties": {}}),
     Tool("list_matches", "List the user's matches, optionally filtered by status (new, drafted, sent, replied, skipped).", {
@@ -162,6 +165,10 @@ def _run_tool(db: Session, user: User, name: str, args: dict, latest_user_text: 
             billing.require_access(db, user)
             r = research_svc.research_startup(db, m.startup)
             return {"ok": True, "research": r or "Couldn't find anything specific on their site or in the news."}
+        if name == "proof_of_work":
+            m = pow_svc.suggest(db, user, int(args["match_id"]))
+            cards.append({"type": "draft", "item": matching.match_card(m)})
+            return {"ok": True, "ideas": m.pow["ideas"], "note": "The card shows these with a Start button for each."}
         if name == "list_matches":
             q = select(Match).where(Match.user_id == user.id)
             if args.get("status"):

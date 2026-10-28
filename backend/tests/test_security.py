@@ -22,7 +22,7 @@ def client():
 @pytest.fixture(autouse=True)
 def fresh_limits(monkeypatch):
     main._FAILS.clear()
-    monkeypatch.setattr(main.discovery, "run_discovery", lambda db: 0)  # never hit the network
+    monkeypatch.setattr(main.discovery, "run_discovery", lambda db, stats=None: 0)  # never hit the network
 
 
 def signup(client, email):

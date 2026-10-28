@@ -416,6 +416,26 @@ a { color: var(--a1); }
 .found li { margin: .2rem 0; }
 .found li a { color: var(--faint); font-size: .8rem; }
 .found li a:hover { color: var(--a1); }
+.pow { margin-top: .9rem; padding: .9rem; border-radius: 14px; background: #fffaf2; border: 1px solid #f3dfbf; }
+.pow h4 { margin: 0 0 .2rem; font-size: .98rem; }
+.pow-tip { margin: 0 0 .7rem; font-size: .86rem; color: var(--soft); }
+.pow-idea { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: .7rem .8rem; margin-bottom: .55rem; font-size: .92rem; }
+.pow-idea p { margin: 0 0 .3rem; }
+.pow-idea.chosen { border-color: var(--a1); box-shadow: 0 0 0 2px rgba(91,108,255,.12); }
+.pow-title { display: flex; justify-content: space-between; gap: .6rem; align-items: baseline; }
+.pow-effort { font-size: .78rem; color: var(--faint); white-space: nowrap; }
+.pow-why { color: var(--soft); font-size: .86rem; }
+.pow-idea .btn, .pow-starter > .btn, .pow-link .btn { padding: .4rem .85rem; font-size: .86rem; }
+.pow-idea .btn { margin-top: .2rem; }
+.pow-picked { font-size: .82rem; font-weight: 700; color: var(--a1); }
+.pow-starter { margin-top: .4rem; }
+.pow-label { margin: .2rem 0 .35rem; font-size: .8rem; font-weight: 700; color: var(--faint); text-transform: uppercase; letter-spacing: .06em; }
+.pow-text { white-space: pre-wrap; font-family: var(--font-letter); line-height: 1.6; font-size: .93rem; background: var(--card);
+  border: 1px solid var(--line); border-radius: 12px; padding: .8rem; max-height: 340px; overflow: auto; margin-bottom: .5rem; }
+.pow-link { display: flex; gap: .5rem; margin-top: .6rem; flex-wrap: wrap; }
+.pow-link input { flex: 1 1 220px; min-width: 0; padding: .55rem .75rem; border-radius: var(--r-sm); border: 1px solid var(--line-strong); background: var(--card); }
+.pow-link input:focus { outline: none; border-color: var(--a1); }
+.pow-done { margin: .5rem 0 0; font-size: .88rem; color: var(--ok); font-weight: 600; overflow-wrap: anywhere; }
 .envelope { margin-top: 0.9rem; padding: 0.95rem; border-radius: 14px; background: var(--card-2); border: 1px solid var(--line); font-family: var(--font-letter); }
 .envelope .to, .envelope .subj { margin: 0; font-family: var(--font-ui); font-size: 0.9rem; color: var(--soft); }
 .envelope .subj { color: var(--ink); font-weight: 700; margin-bottom: 0.6rem; }

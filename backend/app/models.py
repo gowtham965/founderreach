@@ -110,6 +110,8 @@ class Match(Base):
     # new → drafted → sent → replied   |  skipped
     status: Mapped[str] = mapped_column(String(32), default="new")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    # proof of work (app/services/pow.py): {"ideas": [...], "chosen": int, "starter": str, "link": str}
+    pow: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     user: Mapped[User] = relationship()
     startup: Mapped[Startup] = relationship()
@@ -191,3 +193,13 @@ class Payment(Base):
     state: Mapped[str] = mapped_column(String(16), default="CREATED")  # CREATED, PENDING, COMPLETED, FAILED
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # pass turned on
+
+
+class JobRun(Base):
+    """One row per background job run, so the ops report can spot failures and sources that went quiet."""
+    __tablename__ = "job_runs"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(64), index=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)
+    ok: Mapped[bool] = mapped_column(Boolean, default=True)
+    detail: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # e.g. {"fetch_news": 2, "fetch_startup_map": 0}
