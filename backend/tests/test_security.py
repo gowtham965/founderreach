@@ -10,6 +10,7 @@ import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 from app import main  # noqa: E402
+from app.services import discovery  # noqa: E402
 from app.config import get_settings  # noqa: E402
 
 
@@ -22,7 +23,7 @@ def client():
 @pytest.fixture(autouse=True)
 def fresh_limits(monkeypatch):
     main._FAILS.clear()
-    monkeypatch.setattr(main.discovery, "run_discovery", lambda db, stats=None: 0)  # never hit the network
+    monkeypatch.setattr(discovery, "run_discovery", lambda db, stats=None: 0)  # never hit the network
 
 
 def signup(client, email):

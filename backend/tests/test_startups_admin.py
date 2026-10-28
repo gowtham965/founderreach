@@ -141,6 +141,7 @@ def test_csv_round_trip(client, admin):
 
 def test_recheck_validates_the_gap(client, admin, monkeypatch):
     h, _ = admin
-    monkeypatch.setattr(main, "_recheck", lambda ids: None)  # no network
+    from app.web import startup_routes
+    monkeypatch.setattr(startup_routes, "recheck", lambda ids: None)  # no network
     assert client.post("/api/admin/startups/recheck", headers=h, json={"issue": "everything"}).status_code == 422
     assert client.post("/api/admin/startups/recheck", headers=h, json={"issue": "no_founder_email"}).json()["ok"]

@@ -136,7 +136,8 @@ def test_health_checks_the_database(client, monkeypatch):
 
         def __exit__(self, *a):
             return False
-    monkeypatch.setattr(main, "SessionLocal", lambda: Broken())
+    from app import db as db_module
+    monkeypatch.setattr(db_module, "SessionLocal", lambda: Broken())
     assert client.get("/healthz").status_code == 503
 
 
