@@ -53,6 +53,20 @@ def in_focus(location: str | None, stage: str | None, cities: list[str] | None =
     return True
 
 
+INDIA_PLACES = ("india", "bengaluru", "bangalore", "mumbai", "delhi", "gurugram", "gurgaon", "noida", "pune", "hyderabad",
+                "chennai", "kolkata", "ahmedabad", "jaipur", "kochi", "chandigarh", "indore", "coimbatore", "mysuru", "mysore",
+                "bhubaneswar", "lucknow", "goa", "thiruvananthapuram", "trivandrum", "surat", "nagpur", "vadodara")
+
+
+def keep_in_database(row: dict) -> bool:
+    """The database keeps every Indian startup (any city, any stage); users are matched only with the focus.
+    Indian news rarely names a city in the headline, so a news startup with no known city stays too."""
+    loc = (row.get("location") or "").lower()
+    if any(p in loc for p in INDIA_PLACES):
+        return True
+    return row.get("source") in ("news", "startup_map") and not loc
+
+
 def focus_label() -> str:
     """Plain words for the current focus, e.g. "pre-seed and seed startups in Bengaluru"."""
     s = get_settings()
@@ -306,6 +320,8 @@ def upsert_startups(db: Session, rows: list[dict]) -> int:
             fields.pop("source", None)
             fields.pop("source_url", None)
         if existing:
+            for k in existing.edited or []:  # an admin fixed this field by hand: discovery leaves it alone
+                fields.pop(k, None)
             for k, v in fields.items():
                 setattr(existing, k, v)
             if row.get("founders") and not existing.founders:
@@ -325,12 +341,13 @@ def run_discovery(db: Session, stats: dict | None = None) -> int:
     for source in SOURCES:
         try:
             rows = source()
-            kept = [r for r in rows if in_focus(r.get("location"), r.get("stage"))]
+            kept = [r for r in rows if keep_in_database(r)]
             added = upsert_startups(db, kept)
             total += added
             if stats is not None:
                 stats[source.__name__] = added
-            log.info("%s: %d rows, %d in focus", source.__name__, len(rows), len(kept))
+            log.info("%s: %d rows, %d kept (India), %d in focus", source.__name__, len(rows), len(kept),
+                     sum(in_focus(r.get("location"), r.get("stage")) for r in kept))
         except Exception as exc:
             if stats is not None:
                 stats[source.__name__] = f"failed: {str(exc)[:120]}"

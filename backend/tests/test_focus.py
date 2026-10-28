@@ -41,10 +41,11 @@ def test_yc_only_recent_early_batches_count_as_seed():
     assert discovery._yc_stage({"stage": "Growth", "batch": f"Winter {year}"}) == "growth"
 
 
-def test_run_discovery_keeps_only_focus(monkeypatch):
+def test_database_keeps_all_of_india_but_users_get_the_focus(monkeypatch):
     from app.config import get_settings
     from app.db import SessionLocal, init_db
     from app.models import Startup
+    from app.services import matching
 
     init_db()
     monkeypatch.setattr(get_settings(), "focus_cities", "bengaluru,bangalore")
@@ -53,12 +54,17 @@ def test_run_discovery_keeps_only_focus(monkeypatch):
         {"name": "FocusIn BLR", "domain": "focusin-blr.in", "location": "Bengaluru, India", "stage": "seed"},
         {"name": "FocusOut Mumbai", "domain": "focusout-mum.in", "location": "Mumbai, India", "stage": "seed"},
         {"name": "FocusOut SeriesB", "domain": "focusout-b.in", "location": "Bengaluru", "stage": "series b"},
+        {"name": "FocusOut SF", "domain": "focusout-sf.com", "location": "San Francisco, CA", "stage": "seed"},
     ]
     monkeypatch.setattr(discovery, "SOURCES", [lambda: rows])
     with SessionLocal() as db:
-        assert discovery.run_discovery(db) == 1
+        assert discovery.run_discovery(db) == 3
         names = {s.name for s in db.query(Startup).filter(Startup.name.like("Focus%"))}
-    assert names == {"FocusIn BLR"}
+        public = {c["name"] for c in matching.public_fresh(db, limit=500)}
+        db.query(Startup).filter(Startup.name.like("Focus%")).delete(synchronize_session=False)
+        db.commit()
+    assert names == {"FocusIn BLR", "FocusOut Mumbai", "FocusOut SeriesB"}  # India kept, any city or stage
+    assert "FocusIn BLR" in public and not {"FocusOut Mumbai", "FocusOut SeriesB"} & public  # users see only the focus
 
 
 def test_focus_label():

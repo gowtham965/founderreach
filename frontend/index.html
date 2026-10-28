@@ -254,6 +254,11 @@
     </section>
 
     <section id="admin" class="admin" hidden>
+      <div class="admin-seg" role="tablist">
+        <button type="button" data-view="overview" aria-selected="true">Overview</button>
+        <button type="button" data-view="startups" aria-selected="false">Startups</button>
+      </div>
+      <div id="admin-overview" class="admin-view">
       <div class="admin-actions">
         <button class="btn ghost" id="discover-btn">Refresh startup pool</button>
         <button class="btn ghost" id="ops-btn">Ops report</button>
@@ -269,7 +274,58 @@
         <input type="search" id="user-q" placeholder="Search email or name" aria-label="Search users"></div>
         <div class="table-wrap"><table class="tbl" id="users-tbl"></table></div></div>
       <div class="panel-a"><h3>Payments</h3><div class="table-wrap"><table class="tbl" id="pay-tbl"></table></div></div>
+      </div>
+
+      <div id="admin-startups" class="admin-view" hidden>
+        <p class="st-summary" id="st-summary"></p>
+        <div class="panel-a"><div class="panel-head"><h3>Data quality</h3><span class="muted" id="st-quality-note"></span></div>
+          <div class="chips-row" id="st-issues"></div></div>
+        <div class="st-filters">
+          <input type="search" id="st-q" placeholder="Search name, website, what they do" aria-label="Search startups">
+          <select id="st-focus" aria-label="Focus"><option value="">All of India</option><option value="yes">Bangalore seed (what users see)</option><option value="no">Outside the focus</option></select>
+          <select id="st-stage" aria-label="Stage"><option value="">Any stage</option></select>
+          <select id="st-city" aria-label="City"><option value="">Any city</option></select>
+          <select id="st-source" aria-label="Source"><option value="">Any source</option></select>
+          <select id="st-hidden" aria-label="Hidden"><option value="">Visible</option><option value="only">Hidden only</option><option value="all">Visible + hidden</option></select>
+          <select id="st-sort" aria-label="Sort"><option value="new">Newest</option><option value="name">A–Z</option><option value="matches">Most matched</option></select>
+        </div>
+        <div class="admin-actions">
+          <button class="btn primary" id="st-add">+ Add startup</button>
+          <button class="btn ghost" id="st-export">Export CSV</button>
+          <label class="btn ghost" id="st-import-l">Import CSV<input type="file" id="st-import" accept=".csv,text/csv" hidden></label>
+          <span class="muted" id="st-msg" role="status"></span>
+        </div>
+        <div class="panel-a"><div class="table-wrap"><table class="tbl st-tbl" id="st-tbl"></table></div>
+          <div class="pager"><button class="btn ghost" id="st-prev">← Prev</button><span id="st-page"></span><button class="btn ghost" id="st-next">Next →</button></div></div>
+      </div>
     </section>
+
+    <dialog id="st-dlg" class="plans st-dlg" aria-labelledby="st-dlg-h">
+      <button type="button" class="x" id="st-close" aria-label="Close">×</button>
+      <h2 id="st-dlg-h">Startup</h2>
+      <form id="st-form" class="st-form">
+        <label>Name<input name="name" required maxlength="255"></label>
+        <label>Website<input name="domain" placeholder="acme.ai" maxlength="255"></label>
+        <label class="wide">What they do<input name="one_liner" maxlength="500"></label>
+        <label>Stage<input name="stage" list="st-stages" placeholder="seed" maxlength="64"></label>
+        <label>Location<input name="location" placeholder="HSR Layout, Bengaluru" maxlength="255"></label>
+        <label class="wide">Why now (funding, hiring…)<input name="signal" maxlength="500"></label>
+        <label class="wide">Tags (comma separated)<input name="tags" maxlength="400"></label>
+        <label class="wide">Source link<input name="source_url" maxlength="1000"></label>
+        <label>Founder name<input name="founder_name" maxlength="120"></label>
+        <label>Founder title<input name="founder_title" placeholder="Co-founder & CEO" maxlength="80"></label>
+        <label class="wide">Founder email<input name="founder_email" type="email" maxlength="255"></label>
+        <datalist id="st-stages"><option value="pre-seed"><option value="seed"><option value="series a"><option value="series b"><option value="series c"></datalist>
+      </form>
+      <div class="st-info" id="st-info"></div>
+      <p class="error" id="st-err" role="alert"></p>
+      <div class="admin-actions st-dlg-actions">
+        <button class="btn primary" id="st-save">Save</button>
+        <button class="btn ghost" id="st-recheck">Look up founders & research again</button>
+        <input id="st-hide-reason" placeholder="Why hide? (optional)" maxlength="255">
+        <button class="btn ghost danger" id="st-hide">Hide from users</button>
+      </div>
+    </dialog>
   </div>
 
   <dialog id="plans" class="plans" aria-labelledby="plans-h">

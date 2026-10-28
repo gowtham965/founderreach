@@ -559,3 +559,34 @@ a { color: var(--a1); }
 .tbl td small { color: var(--faint); }
 .tbl .warn-t { color: var(--warn); }
 .tbl tr:last-child td { border-bottom: 0; }
+
+/* ---- admin: startup database ---- */
+.admin-seg { display: inline-flex; gap: 4px; padding: 4px; background: var(--card); border: 1px solid var(--line); border-radius: 999px; justify-self: start; }
+.admin-seg button { border: 0; background: transparent; padding: .4rem 1rem; border-radius: 999px; cursor: pointer; color: var(--soft); font-weight: 600; }
+.admin-seg button[aria-selected="true"] { background: var(--ink); color: #fff; }
+.admin-view { display: grid; gap: 1rem; min-width: 0; }
+.st-summary { margin: 0; color: var(--soft); }
+.chips-row { display: flex; flex-wrap: wrap; gap: .45rem; align-items: center; }
+.qchip.on { border-color: var(--a1); color: #fff; background: var(--a1); }
+.st-filters { display: flex; flex-wrap: wrap; gap: .5rem; }
+.st-filters input, .st-filters select { padding: .5rem .75rem; border-radius: 999px; border: 1px solid var(--line-strong); background: var(--card); font-size: .9rem; min-width: 0; }
+.st-filters input { flex: 1 1 240px; }
+.st-tbl tr.click { cursor: pointer; }
+.st-tbl tr.click:hover td { background: var(--card-2); }
+.st-tbl td:first-child { white-space: normal; min-width: 220px; }
+.pager { display: flex; gap: .8rem; align-items: center; justify-content: flex-end; margin-top: .6rem; font-size: .88rem; color: var(--soft); }
+.pager .btn { padding: .35rem .8rem; font-size: .85rem; }
+label.btn { cursor: pointer; }
+#st-msg { font-size: .88rem; }
+.st-dlg { width: min(720px, calc(100vw - 32px)); max-height: calc(100vh - 40px); overflow: auto; }
+.st-form { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem .8rem; }
+.st-form label { display: grid; gap: .25rem; font-size: .82rem; color: var(--soft); font-weight: 600; }
+.st-form .wide { grid-column: 1 / -1; }
+.st-form input { padding: .55rem .7rem; border-radius: var(--r-sm); border: 1px solid var(--line-strong); background: var(--card); font-size: .93rem; color: var(--ink); }
+.st-form input:focus { outline: none; border-color: var(--a1); }
+@media (max-width: 560px) { .st-form { grid-template-columns: 1fr; } }
+.st-info { margin-top: .8rem; font-size: .86rem; color: var(--soft); }
+.st-info p { margin: .25rem 0; overflow-wrap: anywhere; }
+.st-info b { color: var(--ink); }
+.st-dlg-actions { margin-top: .6rem; align-items: center; }
+.st-dlg-actions input { flex: 1 1 160px; min-width: 0; padding: .45rem .7rem; border-radius: 999px; border: 1px solid var(--line-strong); background: var(--card); }

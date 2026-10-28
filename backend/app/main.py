@@ -13,7 +13,7 @@ from pathlib import Path
 
 import httpx
 from fastapi import BackgroundTasks, Depends, FastAPI, File, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import func, select, text
@@ -25,7 +25,7 @@ from app.config import get_settings
 from app.db import SessionLocal, get_db, init_db
 from app.llm import usage
 from app.models import ChatMessage, Match, Payment, Startup, User
-from app.services import admin as admin_svc, alerts, backup, billing, discovery, email_check, google_login, mailer, matching, ops, outreach, pow as pow_svc, profile as profile_svc
+from app.services import admin as admin_svc, alerts, backup, billing, discovery, email_check, google_login, mailer, matching, ops, outreach, pow as pow_svc, profile as profile_svc, startups_admin
 from app.services import wa_bot, whatsapp
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -648,6 +648,111 @@ def admin_test_alert(user: User = Depends(current_user)):
     if not alerts.send("FounderReach test alert", "Alerts work. You'll get one for each sign-up and payment.", tags="bell", wait=True):
         raise HTTPException(400, "Alerts aren't set up: add NTFY_TOPIC in Render")
     return {"ok": True}
+
+
+# ---------- admin: the startup database ----------
+def _admin_only(user: User) -> None:
+    if not is_admin(user):
+        raise HTTPException(403, "Admins only")
+
+
+@app.get("/api/admin/startups")
+def admin_startups(q: str = "", stage: str = "", city: str = "", source: str = "", focus: str = "", issue: str = "",
+                   hidden: str = "", sort: str = "new", page: int = 1, user: User = Depends(current_user),
+                   db: Session = Depends(get_db)):
+    _admin_only(user)
+    return startups_admin.listing(db, q[:100], stage, city[:60], source, focus, issue, hidden, sort, page)
+
+
+class StartupIn(BaseModel):
+    name: str | None = Field(None, max_length=255)
+    domain: str | None = Field(None, max_length=255)
+    one_liner: str | None = Field(None, max_length=2000)
+    stage: str | None = Field(None, max_length=64)
+    location: str | None = Field(None, max_length=255)
+    signal: str | None = Field(None, max_length=2000)
+    tags: list[str] | None = None
+    source_url: str | None = Field(None, max_length=2000)
+    founder_name: str | None = Field(None, max_length=120)
+    founder_title: str | None = Field(None, max_length=80)
+    founder_email: str | None = Field(None, max_length=255)
+    hidden: bool | None = None
+    hidden_reason: str | None = Field(None, max_length=255)
+
+
+def _startup_act(fn):
+    try:
+        return fn()
+    except startups_admin.StartupError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/api/admin/startups")
+def admin_add_startup(body: StartupIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    _admin_only(user)
+    return startups_admin.row(_startup_act(lambda: startups_admin.create(db, body.model_dump(exclude_none=True))))
+
+
+@app.patch("/api/admin/startups/{startup_id}")
+def admin_edit_startup(startup_id: int, body: StartupIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    _admin_only(user)
+    return startups_admin.row(_startup_act(lambda: startups_admin.update(db, startup_id, body.model_dump(exclude_unset=True))))
+
+
+def _recheck(ids: list[int]) -> None:
+    """Look up founders, emails and research again (background; uses Hunter lookups when nothing is published)."""
+    from app.services import research
+    for sid in ids:
+        with SessionLocal() as db:
+            s = db.get(Startup, sid)
+            if s is None:
+                continue
+            try:
+                outreach.enrich_startup(db, s, force=True)
+                research.research_startup(db, s, force=True)
+            except Exception:
+                logging.getLogger(__name__).exception("re-check failed for startup %s", sid)
+
+
+@app.post("/api/admin/startups/{startup_id}/recheck")
+def admin_recheck_startup(startup_id: int, user: User = Depends(current_user)):
+    _admin_only(user)
+    threading.Thread(target=_recheck, args=([startup_id],), daemon=True).start()
+    return {"ok": True, "message": "Checking again: founders, emails and research update in a minute."}
+
+
+class RecheckIn(BaseModel):
+    issue: str = Field(pattern="^(no_website|no_founder|no_founder_email|not_checked)$")
+
+
+@app.post("/api/admin/startups/recheck")
+def admin_recheck_many(body: RecheckIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Re-check up to 20 in-focus startups with this gap: each can use a Hunter lookup, and the free plan is small."""
+    _admin_only(user)
+    ids = [r["id"] for r in startups_admin.listing(db, issue=body.issue, focus="yes", per_page=20)["rows"]]
+    threading.Thread(target=_recheck, args=(ids,), daemon=True).start()
+    return {"ok": True, "count": len(ids), "message": f"Re-checking {len(ids)} startups in the background (a few minutes)."}
+
+
+@app.get("/api/admin/startups.csv")
+def admin_export_startups(user: User = Depends(current_user), db: Session = Depends(get_db)):
+    _admin_only(user)
+    name = f"founderreach-startups-{datetime.now(timezone.utc):%Y-%m-%d}.csv"
+    return Response(startups_admin.export_csv(db), media_type="text/csv",
+                    headers={"Content-Disposition": f'attachment; filename="{name}"', "Cache-Control": "no-store"})
+
+
+@app.post("/api/admin/startups/import")
+async def admin_import_startups(file: UploadFile = File(...), user: User = Depends(current_user), db: Session = Depends(get_db)):
+    _admin_only(user)
+    data = await file.read()
+    if len(data) > 5_000_000:
+        raise HTTPException(413, "CSV must be under 5 MB")
+    try:
+        text_ = data.decode("utf-8")
+    except UnicodeDecodeError:
+        text_ = data.decode("latin-1")
+    return _startup_act(lambda: startups_admin.import_csv(db, text_))
 
 
 @app.get("/api/admin/backup")

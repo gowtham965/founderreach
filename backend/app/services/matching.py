@@ -60,7 +60,7 @@ def find_matches(db: Session, user: User, limit: int | None = None) -> list[Matc
     seen = select(Match.startup_id).where(Match.user_id == user.id)
     since = datetime.now(timezone.utc) - timedelta(days=45)
     pool = [s for s in db.scalars(select(Startup).where(Startup.id.not_in(seen), Startup.discovered_at >= since))
-            if in_focus(s.location, s.stage)]
+            if in_focus(s.location, s.stage) and not s.hidden]
     if not pool:
         return []
     shortlist = _prefilter(user, pool)
@@ -93,7 +93,7 @@ def find_matches(db: Session, user: User, limit: int | None = None) -> list[Matc
 def _focus_pool(db: Session) -> list[Startup]:
     since = datetime.now(timezone.utc) - timedelta(days=45)
     return [s for s in db.scalars(select(Startup).where(Startup.discovered_at >= since).order_by(Startup.discovered_at.desc()))
-            if in_focus(s.location, s.stage)]
+            if in_focus(s.location, s.stage) and not s.hidden]
 
 
 def _area(location: str) -> str:

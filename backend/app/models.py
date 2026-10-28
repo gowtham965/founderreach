@@ -99,6 +99,10 @@ class Startup(Base):
     # research brief for drafts (app/services/research.py): what they do, recent facts and hooks, with sources
     research: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     researched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # admin curation (Admin → Startups): hidden ones never reach users; edited fields are never overwritten by discovery
+    hidden: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    hidden_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    edited: Mapped[list | None] = mapped_column(JSON, nullable=True)
     discovered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 
