@@ -29,9 +29,9 @@ def client():
 
 @pytest.fixture(autouse=True)
 def offline_contacts(monkeypatch):
-    monkeypatch.setattr(contacts, "has_mx", lambda d: True)
+    monkeypatch.setattr(contacts.emails, "has_mx", lambda d: True)
     import httpx  # offline internet: every lookup 404s, so the waterfall falls back to name patterns
-    monkeypatch.setattr(contacts, "_client", httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(404))))
+    monkeypatch.setattr(contacts.fetch, "_client", httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(404))))
 
 
 def auth(client):

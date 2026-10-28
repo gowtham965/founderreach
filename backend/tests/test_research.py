@@ -31,9 +31,9 @@ def site(monkeypatch):
         body = pages.get(str(request.url).rstrip("/"))
         return httpx.Response(200, text=body) if body else httpx.Response(404)
 
-    monkeypatch.setattr(contacts, "_client", httpx.Client(transport=httpx.MockTransport(handler), follow_redirects=True))
+    monkeypatch.setattr(contacts.fetch, "_client", httpx.Client(transport=httpx.MockTransport(handler), follow_redirects=True))
     yield fetched
-    contacts._client = None
+    contacts.fetch._client = None
 
 
 @pytest.fixture

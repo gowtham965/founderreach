@@ -44,10 +44,10 @@ def net(monkeypatch):
     calls: list[str] = []
 
     def install(routes):
-        monkeypatch.setattr(c, "_client", internet(routes, calls))
+        monkeypatch.setattr(c.fetch, "_client", internet(routes, calls))
         return calls
 
-    monkeypatch.setattr(c, "has_mx", lambda d: True)
+    monkeypatch.setattr(c.emails, "has_mx", lambda d: True)
     return install
 
 
@@ -86,8 +86,8 @@ def test_verifier_walks_patterns_until_valid(net, monkeypatch):
         return {"https://www.ycombinator.com/companies/ledgerly": yc_page("https://www.ledgerly.io/")}
 
     calls = net(handler_routes())
-    monkeypatch.setattr(c, "hunter_find", lambda *a: None)
-    monkeypatch.setattr(c, "verify", lambda e: statuses.get(e, "invalid"))
+    monkeypatch.setattr(c.emails, "hunter_find", lambda *a: None)
+    monkeypatch.setattr(c.emails, "verify", lambda e: statuses.get(e, "invalid"))
     r = c.enrich("Ledgerly", "ledgerly.io")
     assert r["contacts"][0] == {"email": "asha.rao@ledgerly.io", "confidence": "verified", "source": "pattern",
                                 "name": "Asha Rao", "title": "Founder"}
@@ -96,8 +96,8 @@ def test_verifier_walks_patterns_until_valid(net, monkeypatch):
 def test_accept_all_domain_is_marked_likely(net, monkeypatch):
     monkeypatch.setattr(get_settings(), "hunter_api_key", "k")
     net({"https://www.ycombinator.com/companies/ledgerly": yc_page("https://www.ledgerly.io/")})
-    monkeypatch.setattr(c, "hunter_find", lambda *a: None)
-    monkeypatch.setattr(c, "verify", lambda e: "accept_all")
+    monkeypatch.setattr(c.emails, "hunter_find", lambda *a: None)
+    monkeypatch.setattr(c.emails, "verify", lambda e: "accept_all")
     assert c.enrich("Ledgerly", "ledgerly.io")["contacts"][0]["confidence"] == "likely"
 
 
@@ -108,7 +108,7 @@ def test_hunter_finder_used_once_before_patterns(net, monkeypatch):
         "https://api.hunter.io/v2/email-finder": {"data": {"email": "asha@ledgerly.io", "verification": {"status": "valid"}}},
     })
     called = []
-    monkeypatch.setattr(c, "verify", lambda e: called.append(e) or "valid")
+    monkeypatch.setattr(c.emails, "verify", lambda e: called.append(e) or "valid")
     r = c.enrich("Ledgerly", "ledgerly.io")
     assert r["contacts"][0]["source"] == "hunter" and r["contacts"][0]["confidence"] == "verified"
     assert called == []  # no extra verifier spend
