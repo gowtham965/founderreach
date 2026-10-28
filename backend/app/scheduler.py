@@ -62,7 +62,7 @@ def wants_daily_matches(user: User, now: datetime | None = None) -> bool:
 
 
 def job_daily_matches():
-    sent = failed = 0
+    sent = failed = roles_sent = 0
     with SessionLocal() as db:
         for user in db.scalars(select(User)).all():
             try:
@@ -71,6 +71,10 @@ def job_daily_matches():
                 billing.require_access(db, user)  # morning matches count as use: starts the trial clock
                 with usage.for_user(user):
                     new = matching.find_matches(db, user)
+                roles = jobs.fit.new_roles_for(db, user)  # roles first seen since yesterday (the 2am refresh)
+                if roles:
+                    outreach.notify(db, user.id, jobs.fit.message(roles))
+                    roles_sent += 1
                 if not new:
                     continue
                 lines = [f"• #{m.id} {m.startup.name}: {m.startup.one_liner[:80]} ({m.reason})" for m in new[:5]]
@@ -83,7 +87,7 @@ def job_daily_matches():
                 log.exception("daily matches failed for user %s", user.id)
                 failed += 1
                 db.rollback()
-    record("daily_matches", failed == 0, {"users_notified": sent, "failed": failed})
+    record("daily_matches", failed == 0, {"users_notified": sent, "role_alerts": roles_sent, "failed": failed})
 
 
 def job_followups():

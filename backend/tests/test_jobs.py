@@ -192,3 +192,67 @@ def test_contact_lookup_keeps_fresher_roles(startup, monkeypatch):
     monkeypatch.setattr(outreach.enrich.contacts_svc, "enrich", lambda *a, **k: {"founders": [], "contacts": [], "jobs": [{"title": "old"}], "github": None})
     outreach.enrich_startup(db, s, force=True)
     assert s.jobs == [{"title": "From the nightly refresh"}]
+
+
+# ---------------------------------------------------------------- phase 2: roles in matching, drafts, alerts, ops
+def _user(db, email, roles=("AI engineer",), skills=("python",)):
+    from app.models import Profile, User
+    db.query(User).filter_by(email=email).delete()
+    u = User(email=email, password_hash="", email_verified_at=now(), last_seen_at=now(),
+             profile=Profile(summary="Builds things", skills=list(skills), target_roles=list(roles), preferences={}, links={}, highlights=[]))
+    db.add(u)
+    db.commit()
+    return u
+
+
+def test_new_role_alerts_fit_the_user(startup):
+    from app.models import Match
+    from app.services.jobs import fit
+    db, s = startup
+    other = Startup(name="Beta Labs", domain="beta.jobtest", stage="seed", location="Koramangala, Bengaluru")
+    far = Startup(name="Gamma", domain="gamma.jobtest", stage="series c", location="Mumbai, India")
+    db.add_all([other, far])
+    db.commit()
+    add = lambda st, title, ago=1: db.add(Job(startup_id=st.id, title=title, url=f"https://x/{st.id}/{title}", board="lever",
+                                               first_seen_at=now() - timedelta(hours=ago), last_seen_at=now()))
+    add(s, "AI Engineer"); add(s, "Product Designer"); add(other, "Senior Python Developer")
+    add(other, "Sales Engineer"); add(far, "AI Engineer"); add(s, "ML Platform (AI) Lead", ago=48)
+    db.commit()
+    u = _user(db, "roles-fit@gmail.com")
+    titles = [j.title for j, _ in fit.new_roles_for(db, u)]
+    assert set(titles) == {"AI Engineer", "Senior Python Developer"}  # not design, not "engineer" alone, not outside focus, not old
+    db.add(Match(user_id=u.id, startup_id=other.id, status="skipped", score=60))
+    db.commit()
+    assert [j.title for j, _ in fit.new_roles_for(db, u)] == ["AI Engineer"]  # skipped startups stay quiet
+    msg = fit.message(fit.new_roles_for(db, u))
+    assert msg.startswith("🆕 New roles that fit you") and "AI Engineer at Acme Robotics" in msg
+    db.query(Match).filter_by(user_id=u.id).delete()
+    db.query(Startup).filter(Startup.id.in_([other.id, far.id])).delete(synchronize_session=False)
+    db.commit()
+
+
+def test_hiring_startups_rank_higher_in_the_prefilter(startup):
+    from app.services import matching
+    db, s = startup
+    quiet = Startup(name="Quiet", domain="quiet.jobtest", stage="seed", location="Bengaluru", one_liner="payments", signal="", tags=[])
+    u = _user(db, "roles-rank@gmail.com", roles=("backend engineer",), skills=("python", "payments"))
+    s.one_liner, s.signal, s.tags, s.jobs = "payments", "", [], [{"title": "Python Backend Engineer"}]
+    assert matching._prefilter(u, [quiet, s])[0] is s
+    db.rollback()  # leave the shared startup as it was
+
+
+def test_drafts_see_when_roles_were_posted(startup):
+    from app.services.outreach import enrich
+    db, s = startup
+    s.jobs = [{"title": "Backend Engineer", "location": "Bengaluru", "posted": "2026-10-20"}]
+    assert enrich._roles_line(s) == "Open roles: Backend Engineer (Bengaluru, posted 2026-10-20)"
+    db.rollback()
+
+
+def test_ops_report_counts_roles(startup):
+    from app.agents import ops
+    db, s = startup
+    db.add(Job(startup_id=s.id, title="X", url="https://x/ops", board="lever", first_seen_at=now(), last_seen_at=now()))
+    db.commit()
+    data = ops.collect(db)
+    assert data["roles"]["open"] >= 1 and data["roles"]["new"] >= 1 and "Open roles:" in ops.render(data, [], "")

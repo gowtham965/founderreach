@@ -21,7 +21,8 @@ SCORE_SYSTEM = """You are a sharp startup recruiter. Score how well each startup
 candidate (0-100) given their skills, wins and stated preferences. Respect hard
 preferences (stage, remote, location, sectors to avoid) strictly: a violation caps the
 score at 30. The reason must be one specific sentence connecting the candidate's
-experience to what the startup does. No generic praise."""
+experience to what the startup does. No generic praise. If the startup has an open role that fits the
+candidate (listed under "hiring"), score higher and name that role in the reason."""
 
 SCORE_PROMPT = """Candidate:
 {profile}
@@ -48,7 +49,9 @@ def _prefilter(user: User, candidates: list[Startup], keep: int = 40) -> list[St
     wanted = _tokens(" ".join((p.skills or []) + (p.target_roles or []) + [p.summary or "", json.dumps(p.preferences or {})]))
 
     def score(s: Startup) -> int:
-        return len(wanted & _tokens(" ".join([s.one_liner, " ".join(s.tags or []), s.signal, s.stage, s.location])))
+        about = len(wanted & _tokens(" ".join([s.one_liner, " ".join(s.tags or []), s.signal, s.stage, s.location])))
+        roles = len(wanted & _tokens(" ".join(j.get("title", "") for j in s.jobs or [])))
+        return about + 2 * roles  # hiring for what they do counts double
 
     return sorted(candidates, key=score, reverse=True)[:keep]
 
@@ -70,7 +73,8 @@ def find_matches(db: Session, user: User, limit: int | None = None) -> list[Matc
         chunk = shortlist[i : i + 20]
         listing = "\n".join(
             json.dumps({"id": s.id, "name": s.name, "what": s.one_liner, "stage": s.stage, "location": s.location,
-                        "tags": (s.tags or [])[:6], "signal": s.signal})
+                        "tags": (s.tags or [])[:6], "signal": s.signal,
+                        "hiring": [j.get("title", "") for j in (s.jobs or [])[:5]]})
             for s in chunk
         )
         rows = llm.complete_json(SCORE_SYSTEM, SCORE_PROMPT.format(profile=profile_brief(user.profile), startups=listing),

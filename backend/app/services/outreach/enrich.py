@@ -34,4 +34,6 @@ def _roles_line(s: Startup) -> str:
     jobs = s.jobs or []
     if not jobs:
         return "Open roles: none listed publicly"
-    return "Open roles: " + "; ".join(f"{j['title']} ({j.get('location') or 'location n/a'})" for j in jobs[:6])
+    def when(j: dict) -> str:
+        return f", posted {j['posted']}" if j.get("posted") else ""
+    return "Open roles: " + "; ".join(f"{j['title']} ({j.get('location') or 'location n/a'}{when(j)})" for j in jobs[:6])

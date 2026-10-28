@@ -17,7 +17,7 @@ from app.auth import is_admin
 from app.config import get_settings
 from app.llm import get_llm
 from app.llm.usage import INR_PER_USD, cost_usd
-from app.models import ChatMessage, JobRun, LLMUsage, Match, Outreach, Payment, Startup, User, aware, now
+from app.models import ChatMessage, Job, JobRun, LLMUsage, Match, Outreach, Payment, Startup, User, aware, now
 
 log = logging.getLogger(__name__)
 
@@ -71,6 +71,10 @@ def collect(db: Session, hours: int = 24) -> dict:
         },
         "startups": {"total": count(select(func.count(Startup.id))),
                      "added": count(select(func.count(Startup.id)).where(Startup.discovered_at >= since))},
+        "roles": {"open": count(select(func.count(Job.id)).where(Job.closed_at.is_(None))),
+                  "hiring_startups": count(select(func.count(func.distinct(Job.startup_id))).where(Job.closed_at.is_(None))),
+                  "new": count(select(func.count(Job.id)).where(Job.first_seen_at >= since)),
+                  "closed": count(select(func.count(Job.id)).where(Job.closed_at >= since))},
         "jobs": [{"name": r.name, "at": aware(r.started_at).isoformat(timespec="minutes"), "ok": r.ok, "detail": r.detail}
                  for r in runs if aware(r.started_at) >= since],
         "_runs": runs,  # for the rules; not shown
@@ -124,13 +128,15 @@ def render(data: dict, warn: list[str], note: str) -> str:
         f"Outreach: {o['chat_messages']} chat messages, {o['new_matches']} matches, {o['drafts']} drafts, "
         f"{o['sent']} sent, {o['replies']} replies",
         f"Startups: +{s['added']} (total {s['total']})",
+        f"Open roles: {data['roles']['open']} at {data['roles']['hiring_startups']} startups "
+        f"(+{data['roles']['new']} new, {data['roles']['closed']} closed)",
         f"AI spend: ₹{ai['spend_inr']:.2f} (7-day avg ₹{ai['avg_day_7d_inr']:.2f}/day)"
         + (f"; top: {', '.join(f'{k} ₹{v:.2f}' for k, v in list(ai['by_task_inr'].items())[:3])}" if ai["by_task_inr"] else ""),
     ]
     jobs = data["jobs"]
     if jobs:
         lines.append("Jobs: " + "; ".join(f"{j['name']} {'✓' if j['ok'] else '✗'}"
-                                           + (f" {j['detail']}" if j["name"] == "discovery" and j["detail"] else "") for j in jobs[-6:]))
+                                           + (f" {j['detail']}" if j["name"] in ("discovery", "jobs") and j["detail"] else "") for j in jobs[-6:]))
     return "\n".join(lines)
 
 
