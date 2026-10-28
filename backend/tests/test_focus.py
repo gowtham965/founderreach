@@ -56,7 +56,7 @@ def test_database_keeps_all_of_india_but_users_get_the_focus(monkeypatch):
         {"name": "FocusOut SeriesB", "domain": "focusout-b.in", "location": "Bengaluru", "stage": "series b"},
         {"name": "FocusOut SF", "domain": "focusout-sf.com", "location": "San Francisco, CA", "stage": "seed"},
     ]
-    monkeypatch.setattr(discovery, "SOURCES", [lambda: rows])
+    monkeypatch.setattr(discovery.pool, "SOURCES", [lambda: rows])
     with SessionLocal() as db:
         assert discovery.run_discovery(db) == 3
         names = {s.name for s in db.query(Startup).filter(Startup.name.like("Focus%"))}
@@ -151,7 +151,7 @@ def test_news_rows_missing_facts_are_filled_from_the_article(monkeypatch):
     pages = {"https://news/dubdub": "<nav><p>Delhi-based X</p></nav>"[:0] + "<p>Bengaluru-based <b>dubdub</b> raised a seed round.</p>",
              "https://news/kiko": "<p>Mumbai-based Kiko raised in a seed round.</p>"}
     fetched = []
-    monkeypatch.setattr(discovery, "_article_text", lambda url: (fetched.append(url), discovery.re.sub(r"<[^>]+>", " ", pages[url]))[1])
+    monkeypatch.setattr(discovery.articles, "_article_text", lambda url: (fetched.append(url), discovery.re.sub(r"<[^>]+>", " ", pages[url]))[1])
     monkeypatch.setattr(discovery.get_settings(), "focus_cities", "bengaluru,bangalore")
     monkeypatch.setattr(discovery.get_settings(), "focus_stages", "pre-seed,seed")
     dub = discovery.fill_from_article({"name": "dubdub", "stage": "unknown", "location": None, "source_url": "https://news/dubdub"})
