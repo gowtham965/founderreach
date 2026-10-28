@@ -17,7 +17,8 @@ _STATIC = Path(__file__).resolve().parents[2] / "frontend"
 
 def asset_v() -> str:
     """Changes whenever the CSS or JS changes, so browsers fetch the new files, not a stale cached copy."""
-    return hashlib.sha256(b"".join((_STATIC / f).read_bytes() for f in ("styles.css", "app.js"))).hexdigest()[:10]
+    files = sorted([*_STATIC.glob("*.css"), *_STATIC.glob("css/*.css"), *_STATIC.glob("js/*.js")])
+    return hashlib.sha256(b"".join(f.read_bytes() for f in files)).hexdigest()[:10]
 
 UPDATED = "26 October 2026"  # bump when the wording or prices change
 

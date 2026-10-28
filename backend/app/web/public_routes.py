@@ -22,7 +22,7 @@ def index():
     v = pages.asset_v()  # versioned links: after a deploy, browsers load the new CSS and JS
     return HTMLResponse((STATIC / "index.html").read_text()
                         .replace('/static/styles.css"', f'/static/styles.css?v={v}"')
-                        .replace('/static/app.js"', f'/static/app.js?v={v}"')
+                        .replace('/static/js/main.js"', f'/static/js/main.js?v={v}"')
                         .replace("</body>", pages.analytics_tag() + "</body>"))
 
 

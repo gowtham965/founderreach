@@ -35,6 +35,8 @@ async def security_headers(request: Request, call_next):
         alerts.crash(f"{request.method} {getattr(route, 'path', request.url.path)}", exc)
         raise
     h = response.headers
+    if request.url.path.startswith("/static/") and request.url.path.endswith((".js", ".css")):
+        h.setdefault("Cache-Control", "no-cache")  # revalidate (a quick 304 when unchanged): modules never go stale
     h.setdefault("Content-Security-Policy", CSP)
     h.setdefault("X-Content-Type-Options", "nosniff")
     h.setdefault("X-Frame-Options", "DENY")
