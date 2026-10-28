@@ -13,6 +13,7 @@ import re
 from sqlalchemy.orm import Session
 
 from app.llm import get_llm
+from app.llm import usage
 from app.models import Match, User
 from app.services import billing
 from app.services import outreach
@@ -69,6 +70,7 @@ def _context(db: Session, m: Match) -> dict:
             "reason": m.reason or "", "roles": outreach._roles_line(s), "research": research_svc.brief_for_prompt(research)}
 
 
+@usage.charged
 def suggest(db: Session, user: User, match_id: int) -> Match:
     m = outreach._owned_match(db, user, match_id)
     billing.require_access(db, user)
@@ -85,6 +87,7 @@ def suggest(db: Session, user: User, match_id: int) -> Match:
     return m
 
 
+@usage.charged
 def start(db: Session, user: User, match_id: int, index: int) -> Match:
     m = outreach._owned_match(db, user, match_id)
     ideas = (m.pow or {}).get("ideas") or []

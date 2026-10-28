@@ -15,6 +15,7 @@ from sqlalchemy import select
 
 from app.config import get_settings
 from app.db import SessionLocal
+from app.llm import usage
 from app.models import JobRun, User
 from app.services import alerts, backup, billing, discovery, matching, ops, outreach
 
@@ -66,14 +67,15 @@ def job_daily_matches():
                 if not wants_daily_matches(user):
                     continue
                 billing.require_access(db, user)  # morning matches count as use: starts the trial clock
-                new = matching.find_matches(db, user)
+                with usage.for_user(user):
+                    new = matching.find_matches(db, user)
                 if not new:
                     continue
                 lines = [f"• #{m.id} {m.startup.name}: {m.startup.one_liner[:80]} ({m.reason})" for m in new[:5]]
                 outreach.notify(db, user.id, f"gm ☀️ {len(new)} new startups fit you today:\n" + "\n".join(lines)
                                 + "\n\nWant me to draft an email to any of them?")
                 sent += 1
-            except billing.PaywallError:
+            except (billing.PaywallError, usage.UserBudgetExceeded):
                 db.rollback()
             except Exception:
                 log.exception("daily matches failed for user %s", user.id)

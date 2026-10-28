@@ -16,13 +16,14 @@ from fastapi import BackgroundTasks, Depends, FastAPI, File, HTTPException, Requ
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, EmailStr, Field
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app import agent, pages, scheduler
 from app.auth import create_token, current_user, decode_payload, decode_token, hash_password, is_admin, session_token, verify_password
 from app.config import get_settings
 from app.db import SessionLocal, get_db, init_db
+from app.llm import usage
 from app.models import ChatMessage, Match, Payment, Startup, User
 from app.services import admin as admin_svc, alerts, backup, billing, discovery, email_check, google_login, mailer, matching, ops, outreach, pow as pow_svc, profile as profile_svc
 from app.services import wa_bot, whatsapp
@@ -58,6 +59,17 @@ def _fill_empty_pool() -> None:
     threading.Thread(target=work, daemon=True).start()
 
 
+if get_settings().sentry_dsn:  # error tracking: every crash with its stack trace, but no personal data
+    import sentry_sdk
+
+    sentry_sdk.init(
+        dsn=get_settings().sentry_dsn,
+        environment="production" if get_settings().base_url.startswith("https://") else "development",
+        send_default_pii=False,          # no IPs, cookies or user details
+        max_request_body_size="never",   # never request bodies (sign-up passwords, resumes)
+        traces_sample_rate=0.0,          # errors only, no performance tracing
+    )
+
 app = FastAPI(title=get_settings().app_name, lifespan=lifespan)
 
 # Content Security Policy: only our own scripts; styles and fonts from us and Google Fonts;
@@ -80,7 +92,12 @@ _CSP = "; ".join([
 
 @app.middleware("http")
 async def security_headers(request: Request, call_next):
-    response = await call_next(request)
+    try:
+        response = await call_next(request)
+    except Exception as exc:  # unhandled crash: tell the admin's phone, then let it reach the logs and Sentry
+        route = request.scope.get("route")  # "/api/matches/{match_id}/draft", not one alert per match id
+        alerts.crash(f"{request.method} {getattr(route, 'path', request.url.path)}", exc)
+        raise
     h = response.headers
     h.setdefault("Content-Security-Policy", _CSP)
     h.setdefault("X-Content-Type-Options", "nosniff")
@@ -387,6 +404,9 @@ async def upload_resume(file: UploadFile = File(...), user: User = Depends(curre
     try:
         p, kind = profile_svc.ingest_document(db, user, text)
         msg = profile_svc.upload_reply(p, kind)
+    except usage.UserBudgetExceeded as exc:
+        db.rollback()
+        msg = str(exc)
     except Exception:  # AI unavailable: keep the conversation whole and say so
         logging.getLogger(__name__).exception("resume reading failed for user %s", user.id)
         db.rollback()
@@ -415,6 +435,8 @@ def _act(fn):
         return fn()
     except billing.PaywallError as exc:
         raise HTTPException(402, str(exc)) from exc
+    except usage.UserBudgetExceeded as exc:  # their AI cost cap for today
+        raise HTTPException(429, str(exc)) from exc
     except outreach.OutreachError as exc:
         raise HTTPException(400, str(exc)) from exc
     except HTTPException:
@@ -757,4 +779,11 @@ def favicon():
 
 @app.api_route("/healthz", include_in_schema=False, methods=["GET", "HEAD"])
 def health():
+    """For Render and the outside uptime monitor: up only if the database answers too."""
+    try:
+        with SessionLocal() as db:
+            db.execute(text("SELECT 1"))
+    except Exception:
+        logging.getLogger(__name__).exception("health check: database unavailable")
+        return PlainTextResponse("database unavailable", status_code=503)
     return HTMLResponse("ok")

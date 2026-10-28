@@ -11,6 +11,7 @@ from pypdf import PdfReader
 from sqlalchemy.orm import Session
 
 from app.llm import get_llm
+from app.llm import usage
 from app.models import Profile, User
 
 EXTRACT_SYSTEM = """You read resumes and build a candidate profile for a job agent that
@@ -58,6 +59,7 @@ def get_or_create_profile(db: Session, user: User) -> Profile:
     return user.profile
 
 
+@usage.charged
 def ingest_document(db: Session, user: User, text: str) -> tuple[Profile, str]:
     """Store a resume or LinkedIn export (replacing only the earlier one of the same kind) and
     rebuild the profile from everything held. Returns (profile, "resume" | "linkedin")."""

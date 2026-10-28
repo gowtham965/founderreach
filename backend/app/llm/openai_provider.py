@@ -39,6 +39,7 @@ class OpenAILLM(LLM):
         self.client = OpenAI(api_key=api_key)
 
     def chat(self, system, messages, tools=None, max_tokens=16000, task="chat", cache_history=False) -> LLMResponse:
+        usage.check_budget()  # site-wide daily AI spend cap
         model, effort = route(task)
         kwargs = {
             "model": model,

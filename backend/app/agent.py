@@ -8,11 +8,15 @@ so a confused model can't rewrite their pipeline.
 import json
 import logging
 import re
+from datetime import datetime, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.auth import is_admin
+from app.config import get_settings
 from app.llm import Tool, get_llm
+from app.llm import usage
 from app.models import ChatMessage, Match, User
 from app.services import billing, discovery, matching, outreach, pow as pow_svc, profile as profile_svc, research as research_svc
 
@@ -231,6 +235,20 @@ Gmail" link they tap to send it themselves. Startup cards and drafts are shown t
 your message, so don't repeat a draft's full text."""
 
 
+def over_daily_chat_cap(db: Session, user: User) -> bool:
+    """Counts today's message; True once the user is past MAX_CHATS_PER_DAY. Admins are never capped."""
+    if is_admin(user):
+        return False
+    today = datetime.now(timezone.utc).date().isoformat()
+    used = (user.chats_used or 0) if user.chats_day == today else 0
+    if used >= get_settings().max_chats_per_day:
+        return True
+    user.chats_day, user.chats_used = today, used + 1
+    db.commit()
+    return False
+
+
+@usage.charged
 def respond(db: Session, user: User, text: str, max_steps: int = 6, channel: str = "web") -> dict:
     db.add(ChatMessage(user_id=user.id, role="user", content=text))
     db.query(ChatMessage).filter(ChatMessage.user_id == user.id, ChatMessage.unread.is_(True)).update({"unread": False})
@@ -242,6 +260,13 @@ def respond(db: Session, user: User, text: str, max_steps: int = 6, channel: str
         db.add(ChatMessage(user_id=user.id, role="assistant", content=str(exc)))
         db.commit()
         return {"reply": str(exc), "cards": [], "paywall": True}
+
+    if over_daily_chat_cap(db, user):
+        msg = (f"That's {get_settings().max_chats_per_day} messages today, the daily limit. The buttons on your cards "
+               "(draft, I sent it, they replied) still work, and chat opens again tomorrow.")
+        db.add(ChatMessage(user_id=user.id, role="assistant", content=msg))
+        db.commit()
+        return {"reply": msg, "cards": []}
 
     profile_svc.get_or_create_profile(db, user)
     just_saved = ""
@@ -273,6 +298,9 @@ def respond(db: Session, user: User, text: str, max_steps: int = 6, channel: str
                 messages.append({"role": "tool", "tool_call_id": tc.id, "name": tc.name, "content": json.dumps(result, default=str)})
         else:
             reply = "I got a bit tangled there. Could you say that again?"
+    except usage.UserBudgetExceeded as exc:  # this user's AI cost cap for today
+        db.rollback()
+        reply = str(exc)
     except Exception:  # missing key, outage, rate limit: answer anyway, never leave the message hanging
         log.exception("chat reply failed for user %s", user.id)
         db.rollback()

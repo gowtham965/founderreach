@@ -51,6 +51,9 @@ class User(Base):
     trial_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     trial_drafts_used: Mapped[int | None] = mapped_column(Integer, nullable=True)
     trial_chats_used: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # chat messages today (cost cap for everyone but admins); day is an ISO date string
+    chats_day: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    chats_used: Mapped[int | None] = mapped_column(Integer, nullable=True)
     pass_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     profile: Mapped["Profile"] = relationship(back_populates="user", uselist=False, cascade="all, delete-orphan")
@@ -147,6 +150,7 @@ class LLMUsage(Base):
     """One row per model call: the measurement channel for what AI actually costs (see app/cost_report.py)."""
     __tablename__ = "llm_usage"
     id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)  # whose work it was (None = shared/system)
     task: Mapped[str] = mapped_column(String(64), index=True)
     model: Mapped[str] = mapped_column(String(64))
     input_tokens: Mapped[int] = mapped_column(Integer, default=0)

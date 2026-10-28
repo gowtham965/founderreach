@@ -51,3 +51,16 @@ def payment(email: str, plan_label: str, amount_inr: int) -> None:
 
 def problem(what: str) -> None:
     send("FounderReach needs a look", what, tags="warning", priority="high")
+
+
+_last_crash: dict[str, float] = {}
+
+
+def crash(where: str, exc: BaseException) -> None:
+    """An unhandled server error. At most one alert per kind of error every 15 minutes."""
+    import time
+    key = f"{where}:{type(exc).__name__}"
+    if time.time() - _last_crash.get(key, 0) < 15 * 60:
+        return
+    _last_crash[key] = time.time()
+    send("Server error", f"{type(exc).__name__} on {where}: {str(exc)[:200]}", tags="rotating_light", priority="high")

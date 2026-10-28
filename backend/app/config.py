@@ -128,6 +128,11 @@ class Settings(BaseSettings):
     # instant admin alerts (app/services/alerts.py): a long random topic name, subscribed to in the ntfy app
     ntfy_topic: str = ""
     ntfy_server: str = "https://ntfy.sh"
+    sentry_dsn: str = ""  # error tracking (sentry.io); off when empty
+    # AI cost guards: per-user chat messages a day (everyone but admins), and a site-wide daily AI spend cap
+    max_chats_per_day: int = 150
+    max_ai_inr_per_user_per_day: float = 25.0  # AI cost one user can run up in a day (admins exempt); 0 = no cap
+    daily_ai_budget_inr: float = 1000.0  # 0 = no cap
 
 
 @lru_cache

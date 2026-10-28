@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.llm import get_llm
+from app.llm import usage
 from app.models import ChatMessage, Match, Outreach, Startup, User, aware, now
 from app.services import contacts as contacts_svc
 from app.services import research as research_svc
@@ -98,6 +99,7 @@ def _use_draft_quota(db: Session, user: User) -> None:
     user.drafts_day, user.drafts_used = today, used + 1
 
 
+@usage.charged
 def draft(db: Session, user: User, match_id: int, instructions: str = "") -> Outreach:
     m = _owned_match(db, user, match_id)
     require_confirmed(user)
@@ -188,6 +190,7 @@ def write_dm(user: User, m: Match) -> str:
     return note[:300]
 
 
+@usage.charged
 def make_dm(db: Session, user: User, match_id: int) -> Outreach:
     m = _owned_match(db, user, match_id)
     if m.outreach is None:
@@ -310,13 +313,14 @@ def prepare_due_followups(db: Session) -> int:
             from app.services import billing
             if not billing.has_access(user):  # stays due: drafted once they get a pass
                 continue
-            data = get_llm().complete_json(
-                followup_system(),
-                f"Candidate:\n{profile_brief(user.profile)}\nName: {user.name}\n\nOriginal email:\n{o.body}\n\n"
-                f"Startup: {o.match.startup.name}: {o.match.startup.one_liner}\nReturn JSON: {{\"body\": str}}",
-                task="followup",
-            )
-            o.followup_draft = humanize("", data["body"], kind="follow-up")["body"]
+            with usage.for_user(user):  # their follow-up: charged to them
+                data = get_llm().complete_json(
+                    followup_system(),
+                    f"Candidate:\n{profile_brief(user.profile)}\nName: {user.name}\n\nOriginal email:\n{o.body}\n\n"
+                    f"Startup: {o.match.startup.name}: {o.match.startup.one_liner}\nReturn JSON: {{\"body\": str}}",
+                    task="followup",
+                )
+                o.followup_draft = humanize("", data["body"], kind="follow-up")["body"]
             db.commit()
             who = o.to_name or o.match.startup.name
             link = compose_links(o.to_email, "Re: " + o.subject.removeprefix("Re: "), o.followup_draft)["gmail"]

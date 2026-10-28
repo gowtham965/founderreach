@@ -16,11 +16,10 @@ from sqlalchemy.orm import Session
 from app.auth import is_admin
 from app.config import get_settings
 from app.llm import get_llm
-from app.llm.usage import cost_usd
+from app.llm.usage import INR_PER_USD, cost_usd
 from app.models import ChatMessage, JobRun, LLMUsage, Match, Outreach, Payment, Startup, User, aware, now
 
 log = logging.getLogger(__name__)
-INR_PER_USD = 88.0
 
 SYSTEM = """You write the daily ops note for the founder of FounderReach, a small paid web app that helps job seekers
 reach Bangalore startup founders. You get yesterday's numbers and rule-based alerts. Write at most 5 short bullets:
