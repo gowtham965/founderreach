@@ -256,3 +256,40 @@ def test_ops_report_counts_roles(startup):
     db.commit()
     data = ops.collect(db)
     assert data["roles"]["open"] >= 1 and data["roles"]["new"] >= 1 and "Open roles:" in ops.render(data, [], "")
+
+
+# ---------------------------------------------------------------- the chat assistant and open roles
+def test_assistant_sees_real_roles_and_can_check_now(web, startup):
+    from app.agents import chat as agent
+    from app.models import Match
+    db, s = startup
+    u = _user(db, "roles-chat@gmail.com")
+    m = Match(user_id=u.id, startup_id=s.id, score=80, reason="fits")
+    db.add(m)
+    db.commit()
+    listed = agent._run_tool(db, u, "list_matches", {}, "which of these are hiring?", [])["matches"][0]
+    assert listed["open_roles"] == [] and listed["roles_checked"] == "not checked yet"  # no guessing from nothing
+    web.routes["https://acme.jobtest"] = (200, '<a href="https://jobs.lever.co/acme">Careers</a>')
+    web.routes["https://api.lever.co/v0/postings/acme"] = (200, LEVER)
+    cards = []
+    checked = agent._run_tool(db, u, "check_open_roles", {"match_id": m.id}, "is Acme hiring?", cards)
+    assert checked["open_roles_total"] == 2 and any("Backend Engineer" in r for r in checked["open_roles"])
+    assert checked["roles_checked"] != "not checked yet" and cards[0]["item"]["open_roles"] == 2
+    other = _user(db, "roles-chat-other@gmail.com")
+    assert agent._run_tool(db, other, "check_open_roles", {"match_id": m.id}, "x", [])["ok"] is False  # not their match
+    db.query(Match).filter_by(id=m.id).delete()
+    db.commit()
+
+
+def test_roles_refresh_runs_one_at_a_time(monkeypatch):
+    from app import scheduler
+    calls = []
+    monkeypatch.setattr(jobs, "run", lambda db: calls.append(1) or {"checked": 0, "failed": 0})
+    assert scheduler._jobs_running.acquire(blocking=False)
+    try:
+        scheduler.job_jobs()  # a second click while one is running does nothing
+    finally:
+        scheduler._jobs_running.release()
+    assert calls == []
+    scheduler.job_jobs()
+    assert calls == [1]

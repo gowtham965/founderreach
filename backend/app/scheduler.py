@@ -9,6 +9,7 @@
 For multiple server instances, move these to a single worker process or a cron service.
 """
 import logging
+import threading
 from datetime import datetime, timedelta, timezone
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -100,8 +101,14 @@ def job_followups():
         raise
 
 
+_jobs_running = threading.Lock()
+
+
 def job_jobs():
-    """Open roles: every focus startup nightly, the rest weekly (app/services/jobs/)."""
+    """Open roles: every focus startup nightly, the rest weekly (app/services/jobs/). One run at a time."""
+    if not _jobs_running.acquire(blocking=False):
+        log.info("open-roles refresh already running; skipped")
+        return
     try:
         with SessionLocal() as db:
             stats = jobs.run(db)
@@ -109,6 +116,8 @@ def job_jobs():
     except Exception as exc:
         log.exception("job refresh failed")
         record("jobs", False, {"error": str(exc)[:200]})
+    finally:
+        _jobs_running.release()
 
 
 def job_backup():

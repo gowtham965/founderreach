@@ -33,6 +33,14 @@ def run_discovery_now(user: User = Depends(current_user)):
     return {"ok": True, "message": "Discovery started; new startups appear in a minute or two."}
 
 
+@router.post("/api/admin/refresh-roles")
+def refresh_roles_now(user: User = Depends(current_user)):
+    """Run tonight's open-roles refresh now, in the background (no AI cost; ~10 seconds per startup)."""
+    require_admin(user)
+    threading.Thread(target=scheduler.job_jobs, daemon=True).start()  # recorded like the 2am run
+    return {"ok": True, "message": "Checking open roles now. Takes about 20-30 minutes for the Bangalore pool; results fill in as it goes."}
+
+
 @router.post("/api/admin/ops-report")
 def ops_report_now(user: User = Depends(current_user), db: Session = Depends(get_db)):
     """Today's ops report, posted to the admin's chat."""

@@ -96,6 +96,11 @@ $("#ops-btn").addEventListener("click", async e => {  // admin: today's ops repo
   } catch (err) { b.textContent = err.message; }
   b.disabled = false;
 });
+$("#roles-btn").addEventListener("click", async e => {
+  e.target.disabled = true;
+  try { e.target.textContent = (await api("/api/admin/refresh-roles", { method: "POST" })).message; }
+  catch (err) { e.target.textContent = err.message; e.target.disabled = false; }
+});
 $("#discover-btn").addEventListener("click", async e => {
   e.target.disabled = true;
   try { const r = await api("/api/admin/discover", { method: "POST" }); e.target.textContent = "Refreshing… check back in a minute"; }

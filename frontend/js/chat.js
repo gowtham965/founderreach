@@ -1,5 +1,6 @@
 // The chat: messages, startup cards in the conversation, suggestion chips, the composer and resume upload.
 import { $, api, el, store } from "./core.js";
+import { render } from "./format.js";
 import { letter } from "./cards.js";
 import { openPlans } from "./billing.js";
 import { refreshMe } from "./shell.js";
@@ -24,7 +25,8 @@ function addMsg(role, text, extra = "") {
   if (extra === "typing") {  // three bouncing dots; the words are for screen readers
     li.setAttribute("aria-label", text);
     li.append(el("i"), el("i"), el("i"));
-  } else linkify(li, text);
+  } else if (role === "assistant") { li.classList.add("md"); render(li, text); }  // bold, lists, links from the AI
+  else linkify(li, text);  // what the user typed stays exactly as typed
   list.appendChild(li);
   list.scrollTop = list.scrollHeight;
   return li;

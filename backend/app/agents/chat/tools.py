@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.llm import Tool
 from app.models import Match, User
 from app.agents import proof_of_work as pow_svc, research as research_svc
-from app.services import billing, matching, outreach, profile as profile_svc
+from app.services import billing, jobs as jobs_svc, matching, outreach, profile as profile_svc
 
 log = logging.getLogger(__name__)
 
@@ -38,6 +38,9 @@ TOOLS = [
          "a bug list, a mini demo...) to stand out. Use when they want to impress a founder or ask what to send.",
          {"type": "object", "properties": {"match_id": {"type": "integer"}}, "required": ["match_id"]}),
     Tool("find_matches", "Find new startups that fit the user now (from the discovered pool).", {"type": "object", "properties": {}}),
+    Tool("check_open_roles", "Look up a matched startup's open roles right now, from its job board and careers page "
+         "(takes a few seconds). Use when the user asks whether a startup is hiring and its roles haven't been checked "
+         "yet or may be stale.", {"type": "object", "properties": {"match_id": {"type": "integer"}}, "required": ["match_id"]}),
     Tool("list_matches", "List the user's matches, optionally filtered by status (new, drafted, sent, replied, skipped).", {
         "type": "object", "properties": {"status": {"type": "string"}}}),
     Tool("draft_email", "Write or revise the email to a matched startup's founder.", {
@@ -81,6 +84,14 @@ def user_said_so(text: str) -> bool:
     return False
 
 
+def _roles(db: Session, match_id: int) -> dict:
+    """What the assistant may say about hiring: the roles actually found, and when they were checked."""
+    s = db.get(Match, match_id).startup
+    roles = [f"{j['title']} ({j.get('location') or 'location n/a'}) {j.get('url', '')}".strip() for j in (s.jobs or [])[:5]]
+    checked = s.jobs_checked_at.date().isoformat() if s.jobs_checked_at else None
+    return {"open_roles": roles, "open_roles_total": len(s.jobs or []), "roles_checked": checked or "not checked yet"}
+
+
 def _run_tool(db: Session, user: User, name: str, args: dict, latest_user_text: str, cards: list) -> dict:
     try:
         if name == "update_profile":
@@ -97,8 +108,17 @@ def _run_tool(db: Session, user: User, name: str, args: dict, latest_user_text: 
             items = [matching.match_card(m) for m in new]
             if items:
                 cards.append({"type": "matches", "items": items})
-            return {"ok": True, "new_matches": [{k: c[k] for k in ("match_id", "name", "one_liner", "stage", "signal", "reason", "score")} for c in items]
+            return {"ok": True, "new_matches": [{**{k: c[k] for k in ("match_id", "name", "one_liner", "stage", "signal", "reason", "score")},
+                                                  **_roles(db, c["match_id"])} for c in items]
                     or "No new fits in today's pool. New startups are added every morning."}
+        if name == "check_open_roles":
+            m = db.get(Match, int(args["match_id"]))
+            if m is None or m.user_id != user.id:
+                return {"ok": False, "error": f"No match #{args['match_id']}"}
+            billing.require_access(db, user)
+            jobs_svc.refresh_startup(db, m.startup)
+            cards.append({"type": "draft", "item": matching.match_card(m)})
+            return {"ok": True, **_roles(db, m.id)}
         if name == "research_startup":
             m = db.get(Match, int(args["match_id"]))
             if m is None or m.user_id != user.id:
@@ -115,7 +135,8 @@ def _run_tool(db: Session, user: User, name: str, args: dict, latest_user_text: 
             if args.get("status"):
                 q = q.where(Match.status == args["status"])
             items = [matching.match_card(m) for m in db.scalars(q.order_by(Match.score.desc()).limit(20))]
-            return {"ok": True, "matches": [{k: c[k] for k in ("match_id", "name", "status", "reason")} for c in items]}
+            return {"ok": True, "matches": [{**{k: c[k] for k in ("match_id", "name", "status", "reason")}, **_roles(db, c["match_id"])}
+                                            for c in items]}
         if name == "draft_email":
             o = outreach.draft(db, user, int(args["match_id"]), args.get("instructions", ""))
             cards.append({"type": "draft", "item": matching.match_card(o.match)})
