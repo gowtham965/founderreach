@@ -45,7 +45,7 @@ export async function boot() {
   if (new URLSearchParams(location.search).has("home")) {  // the logo in the app: show the home page, stay signed in
     history.replaceState({}, "", "/#top");
     document.body.classList.add("signed-in");
-    $(".nav-cta [data-goto=signup]").textContent = "Open my chat →";
+    $(".nav-cta [data-goto=signup]").textContent = "Open my chat";
     return showAuth();
   }
   $("#auth").hidden = true; $("#app").hidden = false;

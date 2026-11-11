@@ -29,7 +29,7 @@ export async function loadPublic() {
     const rows = await api("/api/public/fresh");
     if (rows.length < 3) return;
     const track = $("#ticker-track"); track.textContent = "";
-    const lead = () => [el("span", "item live", "● Fresh in Namma Bengaluru"), el("span", "item kn", "ನಮ್ಮ ಬೆಂಗಳೂರು")];
+    const lead = () => [el("span", "item live", "Fresh in Namma Bengaluru"), el("span", "item kn", "ನಮ್ಮ ಬೆಂಗಳೂರು")];
     const item = r => {
       const it = el("span", "item");
       const href = r.news_url || r.map_url;  // news story, or the startup's page on Bangalore Startup Map
@@ -57,6 +57,6 @@ export function showWhatsApp(href) {
   hero.before(waButton(href, "Chat on WhatsApp", "lg"));
   hero.className = "btn ghost lg"; hero.textContent = "Or sign up with email";
   document.querySelector(".nav-cta [data-goto=signup]").replaceWith(waButton(href, "Chat on WhatsApp", ""));
-  $(".join-copy").append(waButton(href, "Start on WhatsApp →", "lg join-wa"));
+  $(".join-copy").append(waButton(href, "Start on WhatsApp", "lg join-wa"));
   $(".join-copy p").textContent = "Message us on WhatsApp, send your resume, and get your first Bangalore matches today. Prefer email? Sign up here.";
 }

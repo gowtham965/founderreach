@@ -5,14 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>FounderReach</title>
   <meta name="description" content="Seed-stage Bangalore startups that just raised, matched to you, with the founder's email and a draft that opens in your own Gmail, ready to send.">
-  <meta name="theme-color" content="#f6f3ec">
+  <meta name="theme-color" content="#ffffff">
   <link rel="icon" href="/favicon.ico" sizes="any">
   <link rel="icon" href="/static/brand/favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/static/brand/apple-touch-icon.png">
   <link rel="manifest" href="/static/brand/site.webmanifest">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Instrument+Serif:ital@0;1&family=Literata:opsz,wght@7..72,400;7..72,600&family=Baloo+Tamma+2:wght@500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,400..900&family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Instrument+Serif:ital@0;1&family=Literata:opsz,wght@7..72,400;7..72,600&family=Baloo+Tamma+2:wght@500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/css/base.css">
   <link rel="stylesheet" href="/static/css/landing.css">
   <link rel="stylesheet" href="/static/css/app.css">
@@ -36,26 +36,17 @@
     </header>
 
     <section class="hero" id="top">
-      <div class="grid-bg" aria-hidden="true"></div>
-      <div class="map" aria-hidden="true">
-        <span class="hot" style="left:44%;top:6%">HSR Layout</span>
-        <span class="hot" style="left:63%;top:6%">Indiranagar</span>
-        <span style="left:82%;top:6%">Whitefield</span>
-        <span style="left:88%;top:84%">Bellandur</span>
-        <span class="hot" style="left:47%;top:93%">Koramangala</span>
-        <span style="left:27%;top:96%">JP Nagar</span>
-        <span style="left:70%;top:96%">Electronic City</span>
-        <span style="left:4%;top:99%">MG Road</span>
-      </div>
-
       <div class="hero-in">
-        <div class="hero-copy">
+        <div class="hero-head">
           <span class="badge"><b class="kn namaskara"><span class="flag">ನಮಸ್ಕಾರ</span></b><span id="badge-text">Seed-stage startups across Namma Bengaluru</span></span>
-          <h1>Bangalore startups<br>that just raised.<br><span class="serif">Their founders' inboxes.</span></h1>
-          <p class="lede">Tell us what you do. We find the seed-stage teams hiring in HSR, Koramangala and beyond, and write the first email for you.</p>
+          <h1>Bangalore startups that just raised.</h1>
+        </div>
+
+        <div class="hero-body">
+          <p class="lede">Tell us what you do. We find the seed-stage teams hiring in HSR, Koramangala and beyond, get you the founder's email, and write the first note for you.</p>
           <div class="cta-row">
-            <button class="btn dark lg" type="button" data-goto="signup">Find my startups →</button>
-            <span class="note">Free to try · Drafts open in your Gmail · You hit send</span>
+            <button class="btn go lg" type="button" data-goto="signup">Find my startups</button>
+            <span class="note">Free to try. Drafts open in your Gmail, and you hit send.</span>
           </div>
           <p class="silk">🛺 <span>Takes less time than getting through <b>Silk Board junction</b>.</span></p>
         </div>
@@ -64,16 +55,16 @@
           <form class="panel search" id="try-form" role="search">
             <label class="lbl" for="try-input">What do you do?</label>
             <div class="try-field">
-              <input id="try-input" autocomplete="off" placeholder="backend · python · fintech" maxlength="200">
+              <input id="try-input" autocomplete="off" placeholder="backend, python, fintech" maxlength="200">
               <button class="go" type="submit">Show me</button>
             </div>
             <p class="try-hint" id="try-hint">Type your skills to see real Bangalore startups. No sign-up needed.</p>
           </form>
           <div class="results" id="results" aria-live="polite"></div>
           <div class="panel draft" id="demo-draft" aria-hidden="true">
-            <div class="h"><span>To: Priya Sharma · priya@kirana.ai</span><span class="ex">Example</span></div>
+            <div class="h"><span>To: Priya Sharma &lt;priya@kirana.ai&gt;</span><span class="ex">Example</span></div>
             <div class="body" id="demo-body"></div>
-            <div class="send"><span class="note">linkedin.com/in/you</span><span class="btn sm grad" id="demo-send">Open in Gmail</span></div>
+            <div class="send-row"><span class="note">linkedin.com/in/you</span><span class="btn sm grad" id="demo-send">Open in Gmail</span></div>
           </div>
           <div class="toast" id="demo-toast" aria-hidden="true">📬 <div>Priya replied in your Gmail<small>"Free for a call Thursday?"</small></div></div>
         </div>
@@ -81,9 +72,9 @@
     </section>
 
     <!-- always on the page (startups fill in when loaded), so its arrival never pushes the page down -->
-    <div class="ticker" id="ticker"><div class="track" id="ticker-track"><span class="item live">● Fresh in Namma Bengaluru</span><span class="item kn">ನಮ್ಮ ಬೆಂಗಳೂರು</span></div></div>
+    <div class="ticker" id="ticker"><div class="track" id="ticker-track"><span class="item live">Fresh in Namma Bengaluru</span><span class="item kn">ನಮ್ಮ ಬೆಂಗಳೂರು</span></div></div>
 
-    <section class="sources reveal" aria-labelledby="sources-h">
+    <section class="sources" aria-labelledby="sources-h">
       <p class="label" id="sources-h">Where our Bangalore startups come from</p>
       <ul class="logos">
         <li title="Y Combinator"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M0 24V0h24v24H0zM6.951 5.896l4.112 7.708v5.064h1.583v-4.972l4.148-7.799h-1.749l-2.457 4.875c-.372.745-.688 1.434-.688 1.434s-.297-.708-.651-1.434L8.831 5.896h-1.88z"/></svg><span>Y Combinator</span></li>
@@ -101,58 +92,64 @@
       </ul>
     </section>
 
-    <section class="block reveal" id="how" aria-labelledby="how-h">
-      <h2 id="how-h">From "who's hiring?" to <span class="serif">"when can you start?"</span></h2>
-      <ol class="steps">
-        <li><span class="doodle" aria-hidden="true">📄</span><span class="n">01</span><h3>Drop your resume</h3><p>Or your LinkedIn PDF, plus your LinkedIn profile link. We learn what you've built and what you want next.</p></li>
-        <li><span class="doodle" aria-hidden="true">☕</span><span class="n">02</span><h3>Wake up to matches</h3><p>Every morning, with your filter coffee: freshly funded Bangalore startups that fit you, with the founder's name and email.</p></li>
-        <li><span class="doodle" aria-hidden="true">🛺</span><span class="n">03</span><h3>You send, we nudge</h3><p>Open the draft in your Gmail and hit send. We remind you when to follow up (politely, no swalpa adjust maadi) and write that one too.</p></li>
+    <section class="block" id="how" aria-labelledby="how-h">
+      <h2 id="how-h">From "who's hiring?" to "when can you start?"</h2>
+      <ol class="route">
+        <li><h3>Drop your resume</h3><p>Or your LinkedIn PDF, plus your profile link. We learn what you've built and what you want next.</p></li>
+        <li><h3>Wake up to matches</h3><p>Every morning, with your filter coffee: freshly funded Bangalore startups that fit you, with the founder's name and email.</p></li>
+        <li><h3>Send it from your Gmail</h3><p>The draft opens in your own inbox, filled in. Read it, change what you like, hit send.</p></li>
+        <li class="nudge"><h3>Day 3: a follow-up</h3><p>No reply yet? We remind you, with a short follow-up already written. Politely, no swalpa adjust maadi.</p></li>
+        <li class="nudge"><h3>Day 7: one more</h3><p>A last nudge, then we stop. Tell us they replied and the reminders end sooner.</p></li>
       </ol>
     </section>
 
-    <section class="block reveal" aria-labelledby="get-h">
-      <p class="label">What you get</p>
-      <h2 id="get-h">Everything you need to write to a founder, <span class="serif">on one card.</span></h2>
-      <ul class="features">
-        <li><h3>Why it fits you</h3><p>A one-line reason tied to your experience, plus a fit score so the best ones come first.</p></li>
-        <li><h3>The founder's email</h3><p>Found from public sources and labelled honestly: verified, published, likely or guess.</p></li>
-        <li><h3>A drafted email</h3><p>Short, specific and written to sound like you, not like a template.</p></li>
-        <li><h3>Open roles</h3><p>Live listings from their Greenhouse, Lever or Ashby board, so you can apply too.</p></li>
-        <li><h3>A LinkedIn or X note</h3><p>Under 280 characters, for when email isn't the best way in. You send it yourself.</p></li>
-        <li><h3>Follow-up reminders</h3><p>Two polite follow-up drafts, on day 3 and day 7. Tell us they replied and the reminders stop.</p></li>
-      </ul>
-    </section>
+    <section class="block get" aria-labelledby="get-h">
+      <h2 id="get-h">Everything you need to write to a founder, on one card.</h2>
+      <div class="anatomy">
+        <div class="part p-head">
+          <span class="sq" aria-hidden="true">K</span>
+          <div class="t"><b>Kirana AI</b><span class="m">HSR Layout. Raised ₹12 Cr seed, 2 days ago.</span></div>
+          <span class="fit" style="--p:92"><span>92</span></span>
+        </div>
+        <p class="what"><b>Freshly funded, best fit first.</b> Startups that just raised, with a fit score against your resume.</p>
 
-    <section class="block reveal" aria-labelledby="time-h">
-      <p class="label">Time back</p>
-      <h2 id="time-h">The research you'd do by hand, <span class="serif">done for you.</span></h2>
-      <div class="compare">
-        <div class="col before">
-          <h3>On your own</h3>
-          <ul>
-            <li>Scroll Inc42, Entrackr and YourStory every day</li>
-            <li>Check each startup against your skills</li>
-            <li>Hunt down the founder and guess their email</li>
-            <li>Write every email from scratch</li>
-            <li>Remember who to follow up with, and when</li>
-          </ul>
-        </div>
-        <div class="col after">
-          <h3>With FounderReach</h3>
-          <ul>
-            <li>Newly funded Bangalore startups arrive each morning</li>
-            <li>Already matched to your resume</li>
-            <li>Founder name and email, with how sure we are</li>
-            <li>A draft ready to read and send</li>
-            <li>Follow-up reminders, with the draft ready</li>
-          </ul>
-        </div>
+        <div class="part p-why">"You built payment reconciliation at Acme. Their ledger product needs exactly that."</div>
+        <p class="what"><b>Why it fits you.</b> One line, tied to your own experience.</p>
+
+        <div class="part p-who"><span>Priya Sharma, CEO</span><span class="mail">priya@kirana.ai <span class="ok">✓ verified</span></span></div>
+        <p class="what"><b>The founder's email.</b> Found from public sources and labelled honestly: verified, published, likely or guess.</p>
+
+        <div class="part p-draft"><p>Hi Priya, congrats on the seed round. I built payment reconciliation at Acme that cut manual work 70%…</p><span class="btn sm go">Open in Gmail</span></div>
+        <p class="what"><b>A drafted email.</b> Short, specific and written to sound like you, not like a template.</p>
+
+        <div class="part p-roles"><span class="chip">Backend engineer</span><span class="chip">Founding designer</span><span class="src">from Lever</span></div>
+        <p class="what"><b>Open roles.</b> Live listings from their Greenhouse, Lever or Ashby board, so you can apply too.</p>
+
+        <div class="part p-note"><span>LinkedIn note</span><span class="count">212 / 280</span></div>
+        <p class="what"><b>A LinkedIn or X note.</b> For when email isn't the best way in. You send it yourself.</p>
+
+        <div class="part p-follow"><span>Follow-ups ready for day 3 and day 7</span></div>
+        <p class="what"><b>Follow-up reminders.</b> Two polite follow-up drafts. Tell us they replied and the reminders stop.</p>
       </div>
+      <p class="ex-note">Kirana AI is an example. Your cards show real startups.</p>
     </section>
 
-    <section class="block reveal" aria-labelledby="trust-h">
-      <p class="label">You stay in control</p>
-      <h2 id="trust-h">Your name, your inbox, <span class="serif">your call.</span></h2>
+    <section class="block" aria-labelledby="time-h">
+      <h2 id="time-h">The research you'd do by hand, done for you.</h2>
+      <table class="compare">
+        <thead><tr><td></td><th scope="col">On your own</th><th scope="col">With FounderReach</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Finding startups</th><td>Scroll Inc42, Entrackr and YourStory every day</td><td>Newly funded Bangalore startups arrive each morning</td></tr>
+          <tr><th scope="row">Checking the fit</th><td>Check each startup against your skills</td><td>Already matched to your resume</td></tr>
+          <tr><th scope="row">Reaching the founder</th><td>Hunt down the founder and guess their email</td><td>Founder name and email, with how sure we are</td></tr>
+          <tr><th scope="row">Writing</th><td>Write every email from scratch</td><td>A draft ready to read and send</td></tr>
+          <tr><th scope="row">Following up</th><td>Remember who to follow up with, and when</td><td>Reminders on day 3 and 7, with the draft ready</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="block" aria-labelledby="trust-h">
+      <h2 id="trust-h">Your name, your inbox, your call.</h2>
       <ul class="trust">
         <li><h3>We never send for you</h3><p>You send every email yourself, from your own inbox. We can't send on your behalf.</p></li>
         <li><h3>Your inbox stays yours</h3><p>We never ask for access to your Gmail. Drafts open in your email, and replies land there as usual.</p></li>
@@ -161,8 +158,7 @@
       </ul>
     </section>
 
-    <section class="block reveal" id="faq" aria-labelledby="faq-h">
-      <p class="label">FAQ</p>
+    <section class="block" id="faq" aria-labelledby="faq-h">
       <h2 id="faq-h">Questions people ask</h2>
       <div class="faq">
         <details><summary>How much does it cost?</summary><p>Try everything free for 2 days, including up to 5 email drafts and 25 chat messages. After that, get a pass: ₹299 for 7 days, or ₹699 for 30 days (about ₹23 a day). Passes are one-time payments that never renew automatically, and cover fresh startup matches, founder details, drafted emails and follow-up reminders.</p></details>
@@ -176,10 +172,10 @@
       </div>
     </section>
 
-    <section class="join reveal" id="join" aria-labelledby="join-h">
+    <section class="join" id="join" aria-labelledby="join-h">
       <div class="band">
         <div class="join-copy">
-          <h2 id="join-h">Your next job is at a startup that raised <span class="serif">last week.</span></h2>
+          <h2 id="join-h">Your next job is at a startup that raised last week.</h2>
           <p>Create an account, attach your resume, and get your first Bangalore matches today.</p>
           <div class="band-word kn" aria-hidden="true">ಬೆಂಗಳೂರು</div>
         </div>
@@ -208,8 +204,8 @@
     </section>
 
     <footer class="foot">
-      <span>Made with ☕ in Namma Bengaluru · <span class="kn">ನಮ್ಮ ಬೆಂಗಳೂರು</span></span>
-      <span>HSR · Koramangala · Indiranagar · Whitefield · Bellandur · JP Nagar · Electronic City</span>
+      <span>Made with ☕ in Namma Bengaluru <span class="kn">ನಮ್ಮ ಬೆಂಗಳೂರು</span></span>
+      <span>For HSR, Koramangala, Indiranagar, Whitefield, Bellandur, JP Nagar and Electronic City</span>
       <nav class="foot-links"><a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="/refunds">Refunds</a><a href="/contact">Contact</a></nav>
       <span class="fine">Many of our startups come from <a href="https://www.bangalorestartupmap.com/" target="_blank" rel="noopener">Bangalore Startup Map</a>, used with permission. Logos belong to their owners and show where public startup data comes from.</span>
     </footer>

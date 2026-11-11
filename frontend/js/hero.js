@@ -4,18 +4,18 @@ import { goToForm } from "./landing.js";
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
-const SQ_COLORS = ["#ff7a45", "#5b6cff", "#12a150", "#a35bff", "#e0457b", "#0ea5b7"];
+const SQ_COLORS = ["#6b3fe4", "#17141f", "#9a5b13", "#2f5d8a", "#a3195b", "#3d6b5a"];
 const sqColor = name => SQ_COLORS[[...name].reduce((a, c) => a + c.charCodeAt(0), 0) % SQ_COLORS.length];
 
 const DEMO = [
-  { name: "Kirana AI", tag: "raised 2 days ago", m: "HSR Layout · Seed ₹12 Cr · AI for kirana stores", who: "Priya Sharma, CEO · priya@kirana.ai", fit: 92 },
-  { name: "Ledgerline", m: "Indiranagar · Seed $2M · Fintech APIs", who: "Arjun Mehta, CTO · arjun@ledgerline.io", fit: 87 },
-  { name: "Tiffin Labs", m: "Koramangala · Pre-seed · Cloud kitchens OS", who: "Rohan Iyer, Founder · rohan@tiffin.in", fit: 81 },
+  { name: "Kirana AI", tag: "raised 2 days ago", m: "HSR Layout, Seed ₹12 Cr. AI for kirana stores", who: "Priya Sharma, CEO, priya@kirana.ai", fit: 92 },
+  { name: "Ledgerline", m: "Indiranagar, Seed $2M. Fintech APIs", who: "Arjun Mehta, CTO, arjun@ledgerline.io", fit: 87 },
+  { name: "Tiffin Labs", m: "Koramangala, Pre-seed. Cloud kitchens OS", who: "Rohan Iyer, Founder, rohan@tiffin.in", fit: 81 },
 ];
-const DEMO_QUERY = "backend · python · fintech";
+const DEMO_QUERY = "backend, python, fintech";
 const DEMO_BODY = "Hi Priya, congrats on the seed round. I built payment reconciliation at Acme that cut manual work 70%, and Kirana AI's ledger problem looks familiar. 15 minutes next week?";
 
-const exampleLabel = () => el("p", "ex-row", "Example · type your skills above to see real startups");
+const exampleLabel = () => el("p", "ex-row", "Example. Type your skills above to see real startups.");
 function previewCard({ name, tag, m, who, blur, chips, fit }, i) {
   const card = el("div", `pv demo-${i + 1}`);
   const sq = el("span", "sq", name[0]); sq.style.background = sqColor(name);
@@ -109,7 +109,7 @@ $("#try-input").addEventListener("pointerdown", stopDemo);
 $("#try-form").addEventListener("submit", async e => {
   e.preventDefault();
   // pressed "Show me" while the example was playing: search the example's skills for real
-  const q = (demoVisible ? DEMO_QUERY : $("#try-input").value).replaceAll("·", " ").trim(), res = $("#results");
+  const q = (demoVisible ? DEMO_QUERY : $("#try-input").value).replace(/[·,]/g, " ").trim(), res = $("#results");
   stopDemo();
   if (!q) { $("#try-input").focus(); return; }
   $("#try-input").value = q.replace(/\s+/g, " ");
@@ -125,17 +125,17 @@ $("#try-form").addEventListener("submit", async e => {
   rows.forEach((r, i) => {
     const c = previewCard({
       name: r.name, tag: r.stage, chips: r.matched,
-      m: [r.area, r.what].filter(Boolean).join(" · "),
+      m: [r.area, r.what].filter(Boolean).join(". "),
       // never real founder data: a placeholder shape, blurred
       who: r.has_founder ? "Founder name · founder@company.com" : "Founder details after sign-up", blur: true,
     }, i);
     if (r.map_url) {  // credit the directory this startup came from, with a link to its page there
       const via = Object.assign(el("a", "via", "via Bangalore Startup Map"), { href: r.map_url, target: "_blank", rel: "noopener" });
-      c.querySelector(".m").append(" · ", via);
+      c.querySelector(".m").append(". ", via);
     }
     res.append(c); setTimeout(() => c.classList.add("in"), 40 + i * 140);
   });
-  const lock = el("button", "pv lockrow in", "🔓 Sign up free to see the founders and their emails →");
+  const lock = el("button", "pv lockrow in", "Sign up free to see the founders and their emails");
   lock.type = "button"; lock.addEventListener("click", () => goToForm("signup"));
   res.append(lock);
   $("#try-hint").textContent = "Real Bangalore startups from today's pool. Founders unlock when you sign up.";
