@@ -22,7 +22,7 @@
 .plan-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; }
 @media (max-width: 480px) { .plan-grid { grid-template-columns: 1fr; } }
 .plan { position: relative; background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 1.15rem; display: grid; gap: .3rem; align-content: start; }
-.plan.best { border: 2px solid var(--a1); box-shadow: 0 20px 40px -26px rgba(91,108,255,.7); }
+.plan.best { border: 2px solid var(--accent); }
 .plan h3 { margin: 0; font-size: .95rem; color: var(--soft); font-weight: 700; }
 .plan-price { margin: 0; font-size: 2.1rem; font-weight: 800; letter-spacing: -.03em; line-height: 1.1; }
 .plan-price small { font-size: .95rem; font-weight: 600; color: var(--soft); letter-spacing: 0; }

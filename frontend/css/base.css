@@ -1,32 +1,34 @@
 /* Base: colours, fonts and spacing tokens, reset, buttons. Loaded first on every page. */
-/* FounderReach — light, Bangalore.
-   Warm paper, ink-black type, one blue→violet accent, an italic serif for the voice.
-   The loud element is the startup card; Kannada and Bangalore touches stay small. */
+/* FounderReach: white paper, the logo's violet, a soft lilac, and Archivo (wide for headlines).
+   Shared by the home page, the app, dialogs and the policy pages. The loud element is the startup card. */
 :root {
   color-scheme: light;
-  --bg: #f6f3ec;
+  --bg: #ffffff;
   --card: #ffffff;
-  --card-2: #fbf9f4;
-  --ink: #121420;
-  --soft: #5d6173;
-  --faint: #9a9caa;
-  --line: #e3ddd0;
-  --line-strong: #d3cbba;
-  --a1: #5b6cff;
-  --a2: #a35bff;
-  --grad: linear-gradient(100deg, var(--a1), var(--a2));
-  --warm: #ff7a45;
+  --card-2: #f2f0f7;      /* pale lilac-grey panels */
+  --ink: #17141f;         /* the logo's near-black */
+  --soft: #524d63;
+  --faint: #686379;       /* 4.5:1 on white */
+  --line: #e4e1ea;
+  --line-strong: #cbc6d6;
+  --accent: #6b3fe4;      /* the violet in the logo */
+  --accent-deep: #5530c4;
+  --lilac: #dcd2ff;
+  --lilac-2: #ece6ff;
+  --a1: var(--accent);
+  --a2: var(--accent);
+  --grad: var(--accent);  /* kept as a name: buttons and bubbles use it */
   --ok: #12a150;
   --warn: #d93b3b;
-  --info: #5b6cff;
-  --shadow: 0 30px 70px -30px rgba(40, 30, 80, 0.32);
-  --font-ui: "Bricolage Grotesque", system-ui, sans-serif;
-  --font-serif: "Instrument Serif", Georgia, serif;
+  --info: #2f6fbf;
+  --shadow: 0 18px 40px -24px rgba(23, 20, 31, 0.35);
+  --font-ui: "Archivo", system-ui, sans-serif;
   --font-letter: "Literata", Georgia, serif;
   --font-kn: "Baloo Tamma 2", "Noto Sans Kannada", sans-serif;
+  --wide: 125%;
   --r-sm: 10px;
-  --r-md: 16px;
-  --r-lg: 24px;
+  --r-md: 14px;
+  --r-lg: 18px;
 }
 
 * { box-sizing: border-box; }
@@ -38,7 +40,6 @@ button, input, textarea { font: inherit; color: inherit; }
 a { color: var(--a1); }
 :focus-visible { outline: 2px solid var(--a1); outline-offset: 2px; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
-.serif { font-family: var(--font-serif); font-weight: 400; font-style: italic; letter-spacing: -0.01em; }
 .kn { font-family: var(--font-kn); font-weight: 700; }
 .muted { color: var(--soft); }
 
@@ -47,9 +48,10 @@ a { color: var(--a1); }
   padding: 0.65rem 1.15rem; font-weight: 700; cursor: pointer; text-decoration: none; transition: transform .15s, box-shadow .15s, background .15s; }
 .btn.primary, .btn.grad { background: var(--grad); color: #fff; }
 .btn.dark { background: var(--ink); color: #fff; }
-.btn.primary:hover, .btn.dark:hover, .btn.grad:hover { transform: translateY(-1px); box-shadow: 0 12px 26px -12px rgba(18, 20, 32, 0.55); }
+.btn.primary:hover, .btn.grad:hover { background: var(--accent-deep); }
+.btn.dark:hover { background: #000; }
 .btn.wa { background: #128c4a; color: #fff; }
-.btn.wa:hover { transform: translateY(-1px); box-shadow: 0 12px 26px -12px rgba(18, 140, 74, 0.6); }
+.btn.wa:hover { background: #0f7a40; }
 .join-wa { margin-top: 1.4rem; }
 .btn.ghost { background: transparent; border: 1px solid var(--line-strong); color: var(--ink); }
 .btn.ghost:hover { background: var(--card); }

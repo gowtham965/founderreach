@@ -11,8 +11,34 @@ const CONF_HELP = {
   guess: "Built from the founder's name. Unverified, may bounce.",
   user: "You set this address.",
 };
-export function letter(m) {
+// Follow-up reminder days; keep in step with FOLLOWUP_DAYS on the server (default "3,7") and the home page copy.
+const FOLLOW_DAYS = [3, 7];
+// Where a match is on the route: Matched → Drafted → Sent → Day 3 → Day 7 (→ Replied). Same idea as the home page.
+function routeStops(m) {
+  const o = m.outreach, fs = o?.followups_sent || 0;
+  const stops = ["Matched", "Drafted", "Sent", ...FOLLOW_DAYS.map(d => `Day ${d}`)];
+  if (m.status === "replied" || o?.status === "replied") {
+    const upTo = Math.min(2 + fs, stops.length - 1);
+    return [...stops.slice(0, upTo + 1).map(label => ({ label, cls: "done" })), { label: "Replied", cls: "replied" }];
+  }
+  let at = 0;
+  if (o?.status === "draft") at = 1;
+  else if (o?.status === "sent") at = Math.min(2 + fs, stops.length - 1);
+  if (o?.status === "sent" && o.followup_draft && at < stops.length - 1) at += 1;  // a follow-up is due now
+  return stops.map((label, i) => ({ label, cls: i < at ? "done" : i === at ? "now" : "" }));
+}
+
+export function letter(m, { route = false } = {}) {
   const el = $("#letter-tpl").content.firstElementChild.cloneNode(true);
+  const renderRoute = (m) => {
+    const ol = $(".route", el); ol.textContent = "";
+    ol.hidden = !route || m.status === "skipped";
+    if (ol.hidden) return;
+    const stops = routeStops(m);
+    ol.style.setProperty("--stops", stops.length);
+    stops.forEach(s => { const li = document.createElement("li"); li.textContent = s.label; if (s.cls) li.className = s.cls; ol.append(li); });
+    ol.setAttribute("aria-label", `Progress: ${stops.filter(s => s.cls).map(s => s.label).pop() || "Matched"}`);
+  };
   const render = (m) => {
     const co = $(".co", el); co.textContent = "";
     if (m.domain) { const a = document.createElement("a"); a.href = `https://${m.domain}`; a.target = "_blank"; a.rel = "noopener"; a.textContent = m.name; co.appendChild(a); }
@@ -44,6 +70,7 @@ export function letter(m) {
     $(".why-text", el).textContent = m.reason || "";
     $(".why", el).hidden = !m.reason;
     renderFound(m);
+    renderRoute(m);
     const o = m.outreach, env = $(".envelope", el), acts = $(".actions", el), state = $(".state", el);
     acts.textContent = ""; state.className = "state"; state.textContent = "";
     env.hidden = !o || !o.body;

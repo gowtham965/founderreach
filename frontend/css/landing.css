@@ -1,34 +1,14 @@
 /* The home page (nav, hero, demo, ticker, sources, FAQ, sign-up band), the auth form and the policy pages. */
 
 /* ================= landing ================= */
-/* White paper, the logo's violet and a soft lilac, set in a wide sign-painter grotesk.
-   The one loud thing is the hero band; everything below it stays quiet.
-   Tokens are scoped to .landing so the signed-in app keeps its own look. */
+/* The one loud thing is the hero band; everything below it stays quiet. Colours and fonts come from base.css. */
 .landing {
-  --bg: #ffffff;
-  --card: #ffffff;
-  --card-2: #f2f0f7;     /* pale lilac-grey panels */
-  --ink: #17141f;        /* the logo's near-black */
-  --soft: #524d63;
-  --faint: #686379;      /* still 4.5:1 on white */
-  --line: #e4e1ea;
-  --line-strong: #cbc6d6;
-  --accent: #6b3fe4;     /* the violet in the logo */
-  --accent-deep: #5530c4;
-  --lilac: #dcd2ff;
   --band: var(--accent);               /* hero band */
   --band-ink: #fff;                    /* headline on the band */
   --band-stripe: var(--ink);           /* stripe under the band */
   --band-soft: rgba(255,255,255,.85);  /* small text over the band */
-  --a1: var(--accent);    /* links, focus, fit ring */
-  --grad: var(--accent);  /* .btn.primary / .btn.grad from base.css */
-  --shadow: 0 18px 40px -24px rgba(23, 20, 31, 0.35);
-  --font-ui: "Archivo", system-ui, sans-serif;
-  --wide: 125%;
   min-height: 100%; overflow-x: hidden;
-  background: var(--bg); color: var(--ink); font-family: var(--font-ui);
 }
-body:has(> .landing:not([hidden])) { background: #fff; }
 .landing > section, .landing > .nav, .landing > .foot { max-width: 1180px; margin-left: auto; margin-right: auto; padding-left: 16px; padding-right: 16px; }
 @media (min-width: 720px) { .landing > section, .landing > .nav, .landing > .foot { padding-left: 28px; padding-right: 28px; } }
 .landing h1, .landing h2, .landing h3 { text-wrap: balance; }
@@ -185,30 +165,30 @@ body:has(> .landing:not([hidden])) { background: #fff; }
 .landing .block p { margin: 0; }
 
 /* how it works: a bus route, one stop per step (they happen in this order) */
-.route { list-style: none; margin: 0; padding: 0; display: grid; counter-reset: stop; }
-.route li { position: relative; counter-increment: stop; padding: 0 0 2rem 56px; }
-.route li::before { content: ""; position: absolute; left: 15px; top: 0; bottom: 0; width: 6px; background: var(--accent); }
-.route li:last-child::before { bottom: auto; height: 18px; }
-.route li::after { content: counter(stop); position: absolute; left: 0; top: 0; width: 36px; height: 36px; border-radius: 50%; box-sizing: border-box;
+.landing .route { list-style: none; margin: 0; padding: 0; display: grid; counter-reset: stop; }
+.landing .route li { position: relative; counter-increment: stop; padding: 0 0 2rem 56px; }
+.landing .route li::before { content: ""; position: absolute; left: 15px; top: 0; bottom: 0; width: 6px; background: var(--accent); }
+.landing .route li:last-child::before { bottom: auto; height: 18px; }
+.landing .route li::after { content: counter(stop); position: absolute; left: 0; top: 0; width: 36px; height: 36px; border-radius: 50%; box-sizing: border-box;
   display: grid; place-items: center; background: #fff; border: 5px solid var(--accent); font-weight: 800; font-size: 14px; color: var(--ink); }
-.route li.nudge::after { background: var(--lilac); }
-.route h3 { padding-top: 6px; }
-.route p { color: var(--soft); max-width: 40ch; }
+.landing .route li.nudge::after { background: var(--lilac); }
+.landing .route h3 { padding-top: 6px; }
+.landing .route p { color: var(--soft); max-width: 40ch; }
 @media (min-width: 880px) {
-  .route { grid-template-columns: repeat(5, 1fr); }
-  .route li { padding: 58px 22px 0 0; }
-  .route li::before { left: 0; right: 0; top: 15px; bottom: auto; width: auto; height: 6px; }
-  .route li:first-child::before { left: 18px; }
-  .route li:last-child::before { right: auto; width: 18px; height: 6px; }
-  .route h3 { padding-top: 0; }
+  .landing .route { grid-template-columns: repeat(5, 1fr); }
+  .landing .route li { padding: 58px 22px 0 0; }
+  .landing .route li::before { left: 0; right: 0; top: 15px; bottom: auto; width: auto; height: 6px; }
+  .landing .route li:first-child::before { left: 18px; }
+  .landing .route li:last-child::before { right: auto; width: 18px; height: 6px; }
+  .landing .route h3 { padding-top: 0; }
 }
 
 /* what you get: one startup card, each part explained beside it */
 .landing .get { padding-bottom: 4.5rem; background: var(--card-2); box-shadow: 0 0 0 100vmax var(--card-2); clip-path: inset(0 -100vmax); margin-top: clamp(4rem, 8vw, 6.5rem); }
 .anatomy { display: grid; gap: 0; }
 .part { background: #fff; border: 1px solid var(--line-strong); border-radius: 14px; padding: 14px 18px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.what { color: var(--soft); padding: 8px 4px 22px; max-width: 46ch; }
-.what b { color: var(--ink); }
+.anatomy .what { color: var(--soft); padding: 8px 4px 22px; max-width: 46ch; }
+.anatomy .what b { color: var(--ink); }
 .p-head .t { flex: 1; min-width: 0; display: grid; }
 .p-head .t b { font-size: 18px; }
 .p-head .m { font-size: 14px; color: var(--soft); }
@@ -226,10 +206,9 @@ body:has(> .landing:not([hidden])) { background: #fff; }
   .part { border-radius: 0; border-top: 0; min-height: 68px; }
   .part:first-child { border-top: 1px solid var(--line-strong); border-radius: 16px 16px 0 0; }
   .anatomy > .part:nth-last-child(2) { border-radius: 0 0 16px 16px; }
-  .part + .what { border-top: 1px solid transparent; }
-  .what { position: relative; align-self: center; padding: 10px 0 10px 56px; }
-  .what::before { content: ""; position: absolute; left: 8px; top: 50%; width: 36px; border-top: 1px solid var(--line-strong); }
-  .what::after { content: ""; position: absolute; left: 4px; top: calc(50% - 4px); width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  .anatomy .what { position: relative; align-self: center; padding: 10px 0 10px 56px; }
+  .anatomy .what::before { content: ""; position: absolute; left: 8px; top: 50%; width: 36px; border-top: 1px solid var(--line-strong); }
+  .anatomy .what::after { content: ""; position: absolute; left: 4px; top: calc(50% - 4px); width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
 }
 
 /* before / after: a plain table */

@@ -12,7 +12,7 @@
   <link rel="manifest" href="/static/brand/site.webmanifest">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,400..900&family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Instrument+Serif:ital@0;1&family=Literata:opsz,wght@7..72,400;7..72,600&family=Baloo+Tamma+2:wght@500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,400..900&family=Literata:opsz,wght@7..72,400;7..72,600&family=Baloo+Tamma+2:wght@500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/css/base.css">
   <link rel="stylesheet" href="/static/css/landing.css">
   <link rel="stylesheet" href="/static/css/app.css">
@@ -249,7 +249,7 @@
     </section>
 
     <section id="pipeline" class="pipeline" hidden>
-      <p class="stats" id="stats"></p>
+      <div class="stats" id="stats"></div>
       <div class="pipe-actions">
         <button class="btn ghost danger" id="logout-btn">Sign out</button>
         <button class="btn ghost danger" id="delete-btn">Delete my account</button>
@@ -355,6 +355,7 @@
         </div>
         <span class="postmark"><b></b><small>fit</small></span>
       </div>
+      <ol class="route" hidden></ol>
       <p class="why"><b>Why you</b><span class="why-text"></span></p>
       <details class="found" hidden>
         <summary>🔎 What we found</summary>

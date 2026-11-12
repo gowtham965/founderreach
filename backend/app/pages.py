@@ -30,7 +30,7 @@ _SHELL = """<!doctype html>
   <title>{title} · FounderReach</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,400..900&display=swap" rel="stylesheet">
   <link rel="icon" href="/favicon.ico" sizes="any">
   <link rel="icon" href="/static/brand/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/static/css/base.css?v={v}">

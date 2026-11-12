@@ -8,7 +8,10 @@ export async function loadPipeline() {
   const { stats, matches } = await api("/api/dashboard");
   const s = $("#stats"); s.textContent = "";
   const parts = [[stats.sent, "sent"], [stats.replies, "replies"], [stats.drafts, "drafts"], [stats.matches, "startups matched"]];
-  parts.forEach(([n, label], i) => { const b = document.createElement("b"); b.textContent = n; s.append(b, ` ${label}${i < parts.length - 1 ? ", " : ""}`); });
+  for (const [n, label] of parts) {
+    const d = document.createElement("div"), b = document.createElement("b"), t = document.createElement("span");
+    b.textContent = n; t.textContent = label; d.append(b, t); s.append(d);
+  }
   const host = $("#pipe-list"); host.textContent = "";
   if (!matches.length) { const p = document.createElement("p"); p.className = "empty"; p.textContent = "No matches yet. Share your resume in Chat and ask for startups that fit."; host.appendChild(p); return; }
   for (const [status, label] of GROUPS) {
@@ -17,7 +20,7 @@ export async function loadPipeline() {
     const g = document.createElement("section"); g.className = "group";
     const h = document.createElement("h2"); h.textContent = `${label} (${items.length})`;
     const l = document.createElement("div"); l.className = "list";
-    items.forEach(m => l.appendChild(letter(m)));
+    items.forEach(m => l.appendChild(letter(m, { route: true })));
     g.append(h, l); host.appendChild(g);
   }
 }
